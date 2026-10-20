@@ -5,6 +5,7 @@ import { HostRoom } from './host';
 import { hostOnline, joinOnline, type OnlineHost } from './peer';
 import { loopbackPair, type Link } from './transport';
 import { chairCount, type MatchSettings, type MatchState, type Seat } from '../core/rules';
+import { BOT_ID, type BotLevel } from '../core/ai';
 
 type Handler = (msg: HostMsg) => void;
 
@@ -42,7 +43,7 @@ export class Session {
     const r = this.room;
     if (!r) return [];
     const n = chairCount(r.settings);
-    if (r.kind === 'local') return r.seats.slice(0, n).map((_, i) => i);
+    if (r.kind === 'local') return r.seats.slice(0, n).flatMap((s, i) => (s === BOT_ID ? [] : [i]));
     return r.seats.slice(0, n).flatMap((s, i) => (s === this.you ? [i] : []));
   }
 
@@ -78,12 +79,15 @@ function attachLocal(host: HostRoom, profile: Profile, cleanup: () => void): Ses
   return s;
 }
 
-/** Practice or pass-and-play on this device only. */
-export function createLocal(profile: Profile, settings: MatchSettings, second?: Profile): Session {
+/** Practice, pass-and-play or a game against the computer, on this device only. */
+export function createLocal(profile: Profile, settings: MatchSettings, second?: Profile, bot?: BotLevel): Session {
   const id = clientId();
   const host = new HostRoom('LOCAL', id, 'local', settings);
   if (settings.mode === 'practice') host.seatLocal([id, null, null, null]);
-  else host.seatLocal([id, 'local-2', null, null], second ?? { name: 'Player 2', avatar: '🐼', cue: 'ebony' });
+  else if (bot) {
+    host.seatLocal([id, null, null, null]);
+    host.addBot(bot);
+  } else host.seatLocal([id, 'local-2', null, null], second ?? { name: 'Player 2', avatar: '🐼', cue: 'ebony' });
   const s = attachLocal(host, profile, () => {});
   queueMicrotask(() => host.start());
   return s;

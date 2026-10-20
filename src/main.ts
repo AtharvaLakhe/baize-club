@@ -1,10 +1,11 @@
 import './styles.css';
 import { normalizeCode } from './net/protocol';
 import { createLocal, createOnline, joinRoom, type SavedTable, type Session } from './net/session';
-import { prefs, profileForWire, savePrefs } from './prefs';
+import { prefs, profileForWire } from './prefs';
 import { GameView } from './ui/game';
 import { renderHome } from './ui/home';
 import { h } from './ui/dom';
+import { openProfile } from './ui/profile';
 
 const app = document.getElementById('app')!;
 let teardown: (() => void) | null = null;
@@ -27,6 +28,7 @@ function home(notice?: string) {
     host: () => void hostTable(),
     join: (code) => go(`/t/${code}`),
     practice: () => play(createLocal(profileForWire(), { ...prefs().lastSettings, mode: 'practice', teamSize: 1 })),
+    bot: (level) => play(createLocal(profileForWire(), { ...prefs().lastSettings, mode: 'match', teamSize: 1 }, undefined, level)),
     passAndPlay: (second) => play(createLocal(profileForWire(), { ...prefs().lastSettings, mode: 'match', teamSize: 1 }, { ...second, cue: 'ebony' })),
   }, notice);
 }
@@ -49,7 +51,7 @@ function play(session: Session, code?: string) {
 
 function connecting(text: string) {
   clear();
-  const el = h('div.connect', {}, h('div.card.panel', { role: 'status' }, h('h2', {}, text), h('p', {}, 'This usually takes a second or two.')));
+  const el = h('div.connect', {}, h('div.card.panel', { role: 'status', style: 'justify-items:center;text-align:center' }, h('div.spinner'), h('h2', {}, text), h('p', {}, 'This usually takes a second or two.')));
   app.append(el);
 }
 
@@ -81,23 +83,7 @@ async function joinTable(code: string) {
 
 function askName(then: () => void) {
   clear();
-  const input = h('input.input', { placeholder: 'Your name', maxlength: 20, autocomplete: 'nickname' }) as HTMLInputElement;
-  const el = h('div.connect', {}, h('form.card.panel', {
-    onsubmit: (e: Event) => {
-      e.preventDefault();
-      const name = input.value.trim();
-      if (!name) return input.focus();
-      savePrefs({ profile: { ...prefs().profile, name } });
-      then();
-    },
-  },
-  h('h2', {}, 'Pull up a chair'),
-  h('p', {}, 'A friend has invited you to a snooker table. What should they call you?'),
-  input,
-  h('button.btn.btn-brass', { type: 'submit' }, 'Join the table'),
-  ));
-  app.append(el);
-  input.focus();
+  openProfile({ requireName: true, title: 'Pull up a chair', done: then });
 }
 
 function route() {

@@ -1,7 +1,9 @@
-// Snooker rules. Pure functions over plain data: the host runs these and broadcasts the result.
+// Snooker rules, plus the shared match plumbing that 8-ball (see pool8.ts) plugs into.
+// Pure functions over plain data: the host runs these and broadcasts the result.
 
-import { buildTable, BALL_VALUE, COLOR_ORDER, DEFAULT_TUNING, inD, type BallKind, type TableGeometry, type TableTuning } from './table';
+import { buildTable, BALL_VALUE, COLOR_ORDER, DEFAULT_TUNING, inZone, type BallKind, type Game, type HandZone, type SnookerColour, type TableGeometry, type TableTuning } from './table';
 import type { Ball, ShotRecord } from './physics';
+import { poolBallOn, poolOnLabel, rackPool, resolvePool, type PoolState } from './pool8';
 
 export type Seat = 0 | 1;
 export type Phase = 'reds' | 'color' | 'sequence';
@@ -15,6 +17,8 @@ export interface Mutators {
 }
 
 export interface MatchSettings {
+  /** Snooker or 8-ball pool. */
+  game: Game;
   mode: 'match' | 'practice';
   /** 1 = singles, 2 = doubles (two players a side, alternating visits). */
   teamSize: number;
@@ -30,6 +34,7 @@ export interface MatchSettings {
 }
 
 export const DEFAULT_SETTINGS: MatchSettings = {
+  game: 'snooker',
   mode: 'match',
   teamSize: 1,
   reds: 15,
@@ -52,7 +57,7 @@ export function tuningFor(s: MatchSettings): TableTuning {
 }
 
 export function tableFor(s: MatchSettings): TableGeometry {
-  return buildTable(tuningFor(s));
+  return buildTable(tuningFor(s), s.game ?? 'snooker');
 }
 
 export interface Foul { penalty: number; reason: string }
@@ -88,6 +93,10 @@ export interface FrameState {
   respottedBlack: boolean;
   over: boolean;
   winner: Seat | null;
+  /** Where the cue ball may go when in hand (snooker: always the D). */
+  hand?: HandZone;
+  /** 8-ball only: groups and whether the break has been played. */
+  pool?: PoolState;
 }
 
 export interface PlayerStats {
@@ -121,6 +130,7 @@ export const isColor = (k: BallKind) => COLORS.has(k);
 // Setup
 
 export function rack(settings: MatchSettings, table: TableGeometry = tableFor(settings)): Ball[] {
+  if (settings.game === 'pool8') return rackPool(table);
   const R = table.R;
   const balls: Ball[] = [];
   const add = (kind: BallKind, x: number, y: number) =>
@@ -128,7 +138,7 @@ export function rack(settings: MatchSettings, table: TableGeometry = tableFor(se
 
   add('cue', table.baulkX - 55, table.dCenter.y + table.dRadius * 0.45);
   for (const k of COLOR_ORDER) {
-    const s = table.spots[k as Exclude<BallKind, 'cue' | 'red'>];
+    const s = table.spots[k as SnookerColour];
     add(k, s.x, s.y);
   }
   const reds = Math.max(1, Math.min(15, Math.round(settings.reds)));
@@ -152,6 +162,8 @@ export function newFrame(settings: MatchSettings, breaker: Seat): FrameState {
     turn: breaker,
     phase: 'reds',
     ballInHand: true,
+    hand: settings.game === 'pool8' ? 'kitchen' : 'D',
+    pool: settings.game === 'pool8' ? { groups: [null, null], broken: false } : undefined,
     currentBreak: 0,
     freeBall: false,
     decision: null,
@@ -193,7 +205,7 @@ export function activeChair(m: MatchState): number {
 }
 
 /** In doubles, when a side's visit ends its partners swap for next time. */
-function endVisit(m: MatchState, side: Seat) {
+export function endVisit(m: MatchState, side: Seat) {
   if (!isDoubles(m.settings)) return;
   m.up = m.up ?? [0, 0];
   m.up[side] = 1 - m.up[side];
@@ -259,20 +271,32 @@ function isFree(table: TableGeometry, balls: Ball[], x: number, y: number, ignor
   return true;
 }
 
-export function canPlaceCue(table: TableGeometry, balls: Ball[], x: number, y: number): boolean {
-  return inD(table, x, y) && isFree(table, balls, x, y, 0);
+export function canPlaceCue(table: TableGeometry, balls: Ball[], x: number, y: number, zone: HandZone = 'D'): boolean {
+  return inZone(table, zone, x, y) && isFree(table, balls, x, y, 0);
+}
+
+/** Is `b` a legal ball to hit first for whoever is at the table? Works for both games. */
+export function ballOn(m: { settings: MatchSettings; frame: FrameState }, b: Ball): boolean {
+  if (b.id === 0 || !b.on) return false;
+  if (m.settings.game === 'pool8') return poolBallOn(m.frame, b, m.frame.turn);
+  return m.frame.freeBall || isBallOn(m.frame, b.kind);
+}
+
+/** What the player at the table is on, in words. */
+export function onLabel(m: { settings: MatchSettings; frame: FrameState }): string {
+  return m.settings.game === 'pool8' ? poolOnLabel(m.frame) : ballOnLabel(m.frame);
 }
 
 /** Put a colour back on its spot following the official order of fallbacks. */
 export function respot(table: TableGeometry, balls: Ball[], ball: Ball): void {
-  const own = table.spots[ball.kind as Exclude<BallKind, 'cue' | 'red'>];
+  const own = table.spots[ball.kind as SnookerColour];
   const place = (x: number, y: number) => {
     ball.x = x; ball.y = y; ball.on = true;
     ball.vx = ball.vy = ball.sx = ball.sy = ball.side = 0;
   };
   if (isFree(table, balls, own.x, own.y, ball.id)) return place(own.x, own.y);
   for (const k of [...COLOR_ORDER].reverse()) {
-    const s = table.spots[k as Exclude<BallKind, 'cue' | 'red'>];
+    const s = table.spots[k as SnookerColour];
     if (isFree(table, balls, s.x, s.y, ball.id)) return place(s.x, s.y);
   }
   // As close as possible to its own spot towards the top cushion, then towards baulk.
@@ -345,6 +369,7 @@ export function cloneMatch(m: MatchState): MatchState {
  * Returns a new state; the input is not modified.
  */
 export function resolveShot(prev: MatchState, record: ShotRecord, finalBalls: Ball[], opts: ResolveOptions = {}): MatchState {
+  if (prev.settings.game === 'pool8') return resolvePool(prev, record, finalBalls, tableFor(prev.settings), opts);
   const m = cloneMatch(prev);
   const f = m.frame;
   const table = tableFor(m.settings);
@@ -609,6 +634,20 @@ export function concede(prev: MatchState, seat: Seat): MatchState {
 
 /** Shot clock ran out: a foul worth the ball on, minimum four. */
 export function timeOut(prev: MatchState): MatchState {
+  if (prev.settings.game === 'pool8') {
+    const m = cloneMatch(prev);
+    const f = m.frame;
+    const shooter = f.turn;
+    m.stats[shooter].fouls++;
+    endVisit(m, shooter);
+    f.turn = (1 - shooter) as Seat;
+    f.currentBreak = 0;
+    f.ballInHand = true;
+    f.hand = 'table';
+    m.lastShot = { seat: shooter, points: 0, potted: [], foul: { penalty: 0, reason: 'shot clock' }, text: 'Out of time. Ball in hand.', freeBallUsed: false };
+    m.seq++;
+    return m;
+  }
   const m = cloneMatch(prev);
   const f = m.frame;
   const shooter = f.turn;

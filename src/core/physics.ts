@@ -17,6 +17,8 @@ export interface Ball {
   /** Side spin as contact surface speed; positive is anticlockwise seen from above (right-hand side). */
   side: number;
   on: boolean;
+  /** Pool ball number (1-15). Snooker balls are identified by `kind` alone. */
+  n?: number;
 }
 
 export interface ShotParams {
@@ -33,7 +35,7 @@ export interface ShotParams {
 export type SimEvent =
   | { type: 'ball'; a: number; b: number; speed: number }
   | { type: 'cushion'; id: number; speed: number }
-  | { type: 'pot'; id: number; pocket: number; speed: number };
+  | { type: 'pot'; id: number; pocket: number; speed: number; vx: number; vy: number };
 
 export interface ShotRecord {
   firstHit: number | null;
@@ -216,10 +218,11 @@ export function step(world: World, out?: SimEvent[]): void {
 
 function pot(world: World, b: Ball, pocket: number, out?: SimEvent[]) {
   const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+  const vx = b.vx, vy = b.vy;
   b.on = false;
   b.vx = b.vy = b.sx = b.sy = b.side = 0;
   world.record.potted.push(b.id);
-  out?.push({ type: 'pot', id: b.id, pocket, speed });
+  out?.push({ type: 'pot', id: b.id, pocket, speed, vx, vy });
 }
 
 export function isSettled(world: World): boolean {

@@ -1,12 +1,20 @@
-// Table geometry for a full-size snooker table. All units are millimetres.
-// Origin is the top-left corner of the playing surface; the baulk end is on the left (x = 0).
+// Table geometry for a full-size snooker table or a 9-foot pool table. All units are millimetres.
+// Origin is the top-left corner of the playing surface; the baulk (or head) end is on the left.
 
-export type BallKind = 'cue' | 'red' | 'yellow' | 'green' | 'brown' | 'blue' | 'pink' | 'black';
+/** Snooker balls by colour; every pool ball is 'pool' and carries its number on `Ball.n`. */
+export type BallKind = 'cue' | 'red' | 'yellow' | 'green' | 'brown' | 'blue' | 'pink' | 'black' | 'pool';
+
+export type Game = 'snooker' | 'pool8';
+
+export type SnookerColour = 'yellow' | 'green' | 'brown' | 'blue' | 'pink' | 'black';
+
+/** Where the cue ball may be placed when it is in hand. */
+export type HandZone = 'D' | 'kitchen' | 'table';
 
 export const COLOR_ORDER: BallKind[] = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
 
 export const BALL_VALUE: Record<BallKind, number> = {
-  cue: 0, red: 1, yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7,
+  cue: 0, red: 1, yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7, pool: 0,
 };
 
 export const TABLE_LENGTH = 3569;
@@ -14,6 +22,11 @@ export const TABLE_WIDTH = 1778;
 export const BASE_BALL_RADIUS = 26.25;
 export const BAULK_X = 737;
 export const D_RADIUS = 292;
+
+/** A 9-foot pool table: 100 x 50 inch bed, 2 1/4 inch balls. */
+export const POOL_LENGTH = 2540;
+export const POOL_WIDTH = 1270;
+export const POOL_BALL_RADIUS = 28.575;
 
 /** Physical knobs that "mutators" in the lobby can change. */
 export interface TableTuning {
@@ -45,24 +58,31 @@ export interface Pocket {
 }
 
 export interface TableGeometry {
+  game: Game;
   L: number; W: number; R: number;
   segments: Segment[];
   pockets: Pocket[];
-  spots: Record<Exclude<BallKind, 'cue' | 'red'>, { x: number; y: number }>;
+  spots: Record<SnookerColour, { x: number; y: number }>;
   dCenter: { x: number; y: number };
   dRadius: number;
+  /** Snooker: the baulk line. Pool: the head string (the kitchen is behind it). */
   baulkX: number;
+  /** Pool: where the apex ball of the rack sits. */
+  footSpot: { x: number; y: number };
   tuning: TableTuning;
 }
 
-export function buildTable(tuning: TableTuning = DEFAULT_TUNING): TableGeometry {
-  const L = TABLE_LENGTH, W = TABLE_WIDTH;
-  const R = BASE_BALL_RADIUS * tuning.ballScale;
+export function buildTable(tuning: TableTuning = DEFAULT_TUNING, game: Game = 'snooker'): TableGeometry {
+  const pool = game === 'pool8';
+  const L = pool ? POOL_LENGTH : TABLE_LENGTH, W = pool ? POOL_WIDTH : TABLE_WIDTH;
+  const baseR = pool ? POOL_BALL_RADIUS : BASE_BALL_RADIUS;
+  const R = baseR * tuning.ballScale;
   // Distance from the corner where each cushion ends. Mouth width = c * sqrt(2).
-  const c = 64 * tuning.pocketScale;
+  // Pool pockets are far more generous than snooker's.
+  const c = (pool ? 86 : 64) * tuning.pocketScale;
   // Half the middle pocket mouth.
-  const m = 48 * tuning.pocketScale;
-  const jaw = 2.6 * BASE_BALL_RADIUS;
+  const m = (pool ? 68 : 48) * tuning.pocketScale;
+  const jaw = 2.6 * baseR;
   const s2 = Math.SQRT1_2;
 
   const segments: Segment[] = [];
@@ -109,9 +129,23 @@ export function buildTable(tuning: TableTuning = DEFAULT_TUNING): TableGeometry 
   }
 
   const cy = W / 2;
+  if (pool) {
+    const head = L / 4;
+    const foot = { x: (L * 3) / 4, y: cy };
+    return {
+      game, L, W, R, segments, pockets, tuning,
+      baulkX: head,
+      footSpot: foot,
+      dCenter: { x: head, y: cy },
+      dRadius: 0,
+      // Snooker spots are unused in pool; keep them on the cloth's centre line.
+      spots: { yellow: foot, green: foot, brown: { x: head, y: cy }, blue: { x: L / 2, y: cy }, pink: foot, black: foot },
+    };
+  }
   return {
-    L, W, R, segments, pockets, tuning,
+    game, L, W, R, segments, pockets, tuning,
     baulkX: BAULK_X,
+    footSpot: { x: (L * 3) / 4, y: cy },
     dCenter: { x: BAULK_X, y: cy },
     dRadius: D_RADIUS,
     spots: {
@@ -145,4 +179,21 @@ export function clampToD(t: TableGeometry, x: number, y: number): { x: number; y
     py = t.dCenter.y + (dy / d) * max;
   }
   return { x: Math.max(px, t.R + 0.5), y: py };
+}
+
+/** True if the cue ball may be placed at (x, y) when in hand in `zone` (other balls aside). */
+export function inZone(t: TableGeometry, zone: HandZone, x: number, y: number): boolean {
+  if (zone === 'D') return inD(t, x, y);
+  if (y < t.R || y > t.W - t.R || x < t.R || x > t.L - t.R) return false;
+  return zone === 'table' || x <= t.baulkX;
+}
+
+/** Clamp a point into the zone where the cue ball may be placed. */
+export function clampToZone(t: TableGeometry, zone: HandZone, x: number, y: number): { x: number; y: number } {
+  if (zone === 'D') return clampToD(t, x, y);
+  const maxX = zone === 'kitchen' ? t.baulkX : t.L - t.R - 0.5;
+  return {
+    x: Math.min(maxX, Math.max(t.R + 0.5, x)),
+    y: Math.min(t.W - t.R - 0.5, Math.max(t.R + 0.5, y)),
+  };
 }

@@ -10,7 +10,8 @@ import type { AimPrediction } from '../core/aim';
 import type { Ball } from '../core/physics';
 import type { AimGuide } from '../core/rules';
 import type { TableGeometry } from '../core/table';
-import { BALL_COLORS, cueSkin, tableTheme, type TableTheme } from './themes';
+import { BALL_COLORS, cueSkin, poolColor, tableTheme, type TableTheme } from './themes';
+import type { HandZone } from '../core/table';
 
 const M = 0.001;
 const RAIL = 165;
@@ -21,7 +22,7 @@ export const MAX_PULL_MM = 300;
 const CUE_LEN = 1.45;
 const CUE_ELEV = 0.1; // radians the butt is raised
 
-export type CameraMode = 'overview' | 'player' | 'orbit';
+export type CameraMode = 'overview' | 'orbit';
 
 export interface CueDraw {
   x: number; y: number;
@@ -35,7 +36,8 @@ export interface CueDraw {
   spinY?: number;
 }
 
-export interface PotAnim { id: number; kind: Ball['kind']; x: number; y: number; hx: number; hy: number; t0: number }
+/** A ball on its way into a pocket: where and how fast it was going when it dropped. */
+export interface PotAnim { id: number; kind: Ball['kind']; x: number; y: number; vx: number; vy: number; hx: number; hy: number; hr: number; t0: number }
 
 export interface Frame {
   balls: Ball[];
@@ -43,11 +45,11 @@ export interface Frame {
   now: number;
   cue: CueDraw | null;
   guide: { mode: AimGuide; from: { x: number; y: number }; dx: number; dy: number; pred: AimPrediction } | null;
-  placing: { valid: boolean } | null;
+  placing: { valid: boolean; zone: HandZone } | null;
   labels: boolean;
   /** Orientation matrix per ball id. */
   orient: (id: number) => number[];
-  /** Balls are rolling: the player camera pulls back to watch. */
+  /** Balls are rolling (drives trails). */
   moving: boolean;
 }
 
@@ -199,23 +201,14 @@ export class Renderer3D {
     return { pos, target, up };
   }
 
-  private playerPose(cue: CueDraw): Pose {
-    const c = this.v(cue.x, cue.y, 0);
-    const d = new THREE.Vector3(cue.dx, 0, cue.dy).normalize();
-    // Narrow portrait screens need the camera further back to see either side of the line.
-    const back = this.portrait ? 1.45 : 0.95;
-    const pos = c.clone().addScaledVector(d, -back).add(new THREE.Vector3(0, this.portrait ? 0.55 : 0.36, 0));
-    const target = c.clone().addScaledVector(d, 0.75);
-    return { pos, target, up: new THREE.Vector3(0, 1, 0) };
-  }
-
   private orbitPose(now: number): Pose {
     // A slow drift around the table; the target sits right of centre to leave room for panels.
     const a = Math.sin(now * 0.00005) * 0.9 + Math.PI / 2;
-    const r = 3.9;
+    const narrow = this.w <= 900;
+    const r = narrow ? 4.4 : 3.9;
     const right = new THREE.Vector3(Math.sin(a), 0, -Math.cos(a));
-    const shift = this.w > 900 ? -0.38 : 0;
-    const target = right.clone().multiplyScalar(shift);
+    // Wide screens: nudge the table right, clear of the copy and panels.
+    const target = narrow ? new THREE.Vector3() : right.multiplyScalar(-0.38);
     return {
       pos: target.clone().add(new THREE.Vector3(Math.cos(a) * r, 2.1, Math.sin(a) * r)),
       target,
@@ -235,7 +228,6 @@ export class Renderer3D {
     this.lastNow = f.now;
     let want: Pose | null = this.overviewPose;
     if (this.mode === 'orbit') want = this.orbitPose(f.now);
-    else if (this.mode === 'player' && f.cue && !f.moving) want = this.playerPose(f.cue);
     if (!want || !this.pose) return;
     const k = this.mode === 'orbit' ? 1 : 1 - Math.exp(-dt * 5);
     this.pose.pos.lerp(want.pos, k);
@@ -347,10 +339,10 @@ export class Renderer3D {
     if (!show || speed < 1300) { ghosts?.forEach((g) => (g.visible = false)); return; }
     if (!ghosts) {
       ghosts = [0, 1, 2, 3].map((i) => {
-        const key = `${b.kind}:${i}`;
+        const key = `${b.kind}${b.n ?? ''}:${i}`;
         let mat = this.trailMats.get(key);
         if (!mat) {
-          mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(BALL_COLORS[b.kind].base), transparent: true, depthWrite: false, opacity: 0 });
+          mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(b.kind === 'pool' ? poolColor(b.n ?? 1) : BALL_COLORS[b.kind].base), transparent: true, depthWrite: false, opacity: 0 });
           this.trailMats.set(key, mat);
         }
         const g = new THREE.Mesh(this.ballGeo, mat);
@@ -515,6 +507,28 @@ export class Renderer3D {
       g.add(plate);
     }
 
+    // Pool tables carry diamond sights inlaid in the rails.
+    if (t.game === 'pool8') {
+      const pearl = new THREE.MeshStandardMaterial({ color: 0xf4efe4, roughness: 0.3, metalness: 0.1 });
+      const dot = new THREE.CircleGeometry(0.0075, 20).rotateX(-Math.PI / 2).scale(1, 1, 0.55);
+      const mid = (RAIL + CUSHION) / 2;
+      const at = (x: number, y: number, along: boolean) => {
+        const d = new THREE.Mesh(dot, pearl);
+        d.position.set(sx(x), RAIL_TOP + 0.0096, sy(y));
+        if (!along) d.rotation.y = Math.PI / 2;
+        g.add(d);
+      };
+      for (let i = 1; i < 8; i++) {
+        if (i === 4) continue;
+        at((L * i) / 8, -mid, true);
+        at((L * i) / 8, W + mid, true);
+      }
+      for (let j = 1; j < 4; j++) {
+        at(-mid, (W * j) / 4, false);
+        at(L + mid, (W * j) / 4, false);
+      }
+    }
+
     // Soft shadow of the whole table on the floor (seen in tilted views).
     const floorShadow = new THREE.Mesh(
       new THREE.PlaneGeometry((L + 900) * M, (W + 900) * M),
@@ -552,10 +566,16 @@ export class Renderer3D {
     if (this.placeRing) { this.guideGroup.remove(this.placeRing); this.placeRing.geometry.dispose(); }
     const t = this.table;
     const shape = new THREE.Shape();
-    const cx = (t.dCenter.x - t.L / 2) * M, cy = (t.dCenter.y - t.W / 2) * M;
-    shape.moveTo(cx, cy - t.dRadius * M);
-    shape.absarc(cx, cy, t.dRadius * M, -Math.PI / 2, Math.PI / 2, true);
-    shape.closePath();
+    if (t.game === 'pool8') {
+      // The kitchen: everything behind the head string.
+      const x0 = -t.L / 2 * M, x1 = (t.baulkX - t.L / 2) * M, y0 = -t.W / 2 * M, y1 = t.W / 2 * M;
+      shape.moveTo(x0, y0); shape.lineTo(x1, y0); shape.lineTo(x1, y1); shape.lineTo(x0, y1); shape.closePath();
+    } else {
+      const cx = (t.dCenter.x - t.L / 2) * M, cy = (t.dCenter.y - t.W / 2) * M;
+      shape.moveTo(cx, cy - t.dRadius * M);
+      shape.absarc(cx, cy, t.dRadius * M, -Math.PI / 2, Math.PI / 2, true);
+      shape.closePath();
+    }
     const geo = new THREE.ShapeGeometry(shape, 32);
     geo.rotateX(Math.PI / 2);
     this.dMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide }));
@@ -570,12 +590,13 @@ export class Renderer3D {
   // -------------------------------------------------------------------------------------------
   // Balls and cue
 
-  private materialFor(kind: Ball['kind'], labels: boolean): THREE.MeshPhysicalMaterial {
-    const key = `${kind}:${labels && kind !== 'cue' ? 1 : 0}`;
+  private materialFor(b: Ball, labels: boolean): THREE.MeshPhysicalMaterial {
+    const kind = b.kind;
+    const key = kind === 'pool' ? `pool:${b.n}` : `${kind}:${labels && kind !== 'cue' ? 1 : 0}`;
     let m = this.materials.get(key);
     if (!m) {
-      const c = BALL_COLORS[kind];
-      const map = kind === 'cue' ? cueBallTexture() : labels ? labelTexture(c.base, c.label, c.ink) : null;
+      const c = BALL_COLORS[kind === 'pool' ? 'black' : kind];
+      const map = kind === 'pool' ? poolBallTexture(b.n ?? 1) : kind === 'cue' ? cueBallTexture() : labels ? labelTexture(c.base, c.label, c.ink) : null;
       m = new THREE.MeshPhysicalMaterial({
         color: map ? 0xffffff : new THREE.Color(c.base),
         map,
@@ -593,7 +614,7 @@ export class Renderer3D {
   private ballMesh(b: Ball, labels: boolean): THREE.Mesh {
     let mesh = this.ballMeshes.get(b.id);
     if (!mesh) {
-      mesh = new THREE.Mesh(this.ballGeo, this.materialFor(b.kind, labels));
+      mesh = new THREE.Mesh(this.ballGeo, this.materialFor(b, labels));
       mesh.castShadow = true;
       mesh.matrixAutoUpdate = false;
       this.ballGroup.add(mesh);
@@ -604,7 +625,7 @@ export class Renderer3D {
       this.ballGroup.add(sh);
       this.shadowMeshes.set(b.id, sh);
     }
-    if (labels !== this.labelsOn) mesh.material = this.materialFor(b.kind, labels);
+    if (labels !== this.labelsOn) mesh.material = this.materialFor(b, labels);
     return mesh;
   }
 
@@ -690,17 +711,18 @@ export class Renderer3D {
         sh.visible = true;
         this.placeBall(mesh, b.x, b.y, R * M, f.orient(b.id));
         sh.position.copy(this.v(b.x + R * 0.12, b.y + R * 0.18, 0.0006));
+        (sh.material as THREE.MeshBasicMaterial).opacity = 0.6;
         continue;
       }
       const pot = f.pots.find((p) => p.id === b.id);
-      const k = pot ? (f.now - pot.t0) / 380 : 2;
-      if (pot && k < 1) {
-        const e = k * k;
-        const x = pot.x + (pot.hx - pot.x) * Math.min(1, k * 1.6);
-        const y = pot.y + (pot.hy - pot.y) * Math.min(1, k * 1.6);
+      const s = pot ? potPath(pot, (f.now - pot.t0) / 1000, R) : null;
+      if (s) {
+        // Keep going the way it was going, curl into the middle of the hole and fall.
         mesh.visible = true;
-        this.placeBall(mesh, x, y, R * M - e * R * M * 4, f.orient(b.id));
-        sh.visible = false;
+        this.placeBall(mesh, s.x, s.y, (R + s.drop) * M, f.orient(b.id));
+        sh.visible = s.drop > -R;
+        sh.position.copy(this.v(s.x + R * 0.12, s.y + R * 0.18, 0.0006));
+        (sh.material as THREE.MeshBasicMaterial).opacity = 0.6 * Math.max(0, 1 + s.drop / R);
       } else {
         mesh.visible = false;
         sh.visible = false;
@@ -718,8 +740,8 @@ export class Renderer3D {
     this.ghostRing.visible = false;
     if (f.guide && f.guide.mode !== 'off') {
       const g = f.guide, p = g.pred;
-      const endX = p.kind === 'none' ? g.from.x + g.dx * 2500 : p.gx - g.dx * R;
-      const endY = p.kind === 'none' ? g.from.y + g.dy * 2500 : p.gy - g.dy * R;
+      const endX = p.kind === 'none' ? g.from.x + g.dx * 1200 : p.gx - g.dx * R;
+      const endY = p.kind === 'none' ? g.from.y + g.dy * 1200 : p.gy - g.dy * R;
       this.ribbon(0, g.from.x + g.dx * R, g.from.y + g.dy * R, endX, endY, 3.5);
       if (g.mode !== 'line' && p.kind !== 'none') {
         this.ghost.visible = true;
@@ -731,18 +753,19 @@ export class Renderer3D {
       }
       if (g.mode === 'full' && p.kind === 'ball' && p.ballId !== null) {
         const ob = f.balls[p.ballId];
-        const len = 220 + 700 * Math.max(0, p.fullness);
+        // Short stubs: enough to read the angle, not enough to aim the whole shot for you.
+        const len = 70 + 190 * Math.max(0, p.fullness);
         this.ribbon(1, ob.x + p.ox * R, ob.y + p.oy * R, ob.x + p.ox * (R + len), ob.y + p.oy * (R + len), 4.5);
         if (p.cx || p.cy) {
-          const cl = 140 + 380 * (1 - Math.max(0, p.fullness));
+          const cl = 50 + 120 * (1 - Math.max(0, p.fullness));
           this.ribbon(2, p.gx, p.gy, p.gx + p.cx * cl, p.gy + p.cy * cl, 3.5);
         }
       } else if (g.mode === 'full' && p.kind === 'cushion') {
-        this.ribbon(2, p.gx, p.gy, p.gx + p.cx * 420, p.gy + p.cy * 420, 3.5);
+        this.ribbon(2, p.gx, p.gy, p.gx + p.cx * 150, p.gy + p.cy * 150, 3.5);
       }
     }
 
-    this.dMesh.visible = !!f.placing;
+    this.dMesh.visible = !!f.placing && f.placing.zone !== 'table';
     this.placeRing.visible = !!f.placing;
     if (f.placing) {
       const ok = f.placing.valid;
@@ -887,6 +910,26 @@ function hallEnvironment(): THREE.Scene {
   return env;
 }
 
+/**
+ * Where a potted ball is `t` seconds after it dropped. Horizontally it carries its speed, damped
+ * towards the centre of the hole (a critically damped spring, so there is no snap or overshoot).
+ * Vertically it starts falling once it is over the hole. Returns null once it is out of sight.
+ */
+function potPath(p: PotAnim, t: number, R: number): { x: number; y: number; drop: number } | null {
+  if (t < 0) t = 0;
+  const w = 16;
+  const e = Math.exp(-w * t);
+  const ax = p.x - p.hx, ay = p.y - p.hy;
+  const bx = p.vx + w * ax, by = p.vy + w * ay;
+  const x = p.hx + (ax + bx * t) * e;
+  const y = p.hy + (ay + by * t) * e;
+  // Over the lip: fall under gravity (mm/s^2) after the tiniest roll over the edge.
+  const fallT = Math.max(0, t - 0.025);
+  const drop = -0.5 * 9810 * fallT * fallT;
+  if (drop < -R * 5 || t > 1.2) return null;
+  return { x, y, drop };
+}
+
 function disposeTree(o: THREE.Object3D) {
   o.traverse((n) => {
     const mesh = n as THREE.Mesh;
@@ -938,7 +981,23 @@ function clothTexture(t: TableGeometry, th: TableTheme): THREE.CanvasTexture {
     }
     // Markings.
     ctx.strokeStyle = th.lines;
+    ctx.fillStyle = th.lines;
     ctx.lineWidth = 2.2 * s * 1.2;
+    if (t.game === 'pool8') {
+      // Head and foot spots, and a faint head string.
+      for (const p of [t.footSpot, { x: t.baulkX, y: t.W / 2 }]) {
+        ctx.beginPath();
+        ctx.arc(X(p.x), Y(p.y), 6 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(X(t.baulkX), Y(0));
+      ctx.lineTo(X(t.baulkX), Y(t.W));
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      return;
+    }
     ctx.beginPath();
     ctx.moveTo(X(t.baulkX), Y(0));
     ctx.lineTo(X(t.baulkX), Y(t.W));
@@ -996,6 +1055,32 @@ function cueBallTexture(): THREE.CanvasTexture {
     }
     ctx.fillRect(0, 0, 512, 11);
     ctx.fillRect(0, 245, 512, 11);
+  });
+}
+
+/** A pool ball: solid colour, or white with a coloured band (9-15), and its number in a white disc. */
+function poolBallTexture(n: number): THREE.CanvasTexture {
+  const color = poolColor(n);
+  const stripe = n > 8;
+  return canvasTex(1024, 512, (ctx) => {
+    ctx.fillStyle = stripe ? '#f6f1e6' : color;
+    ctx.fillRect(0, 0, 1024, 512);
+    if (stripe) {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 512 * 0.3, 1024, 512 * 0.4);
+    }
+    for (const u of [256, 768]) {
+      ctx.fillStyle = '#f8f5ee';
+      ctx.beginPath();
+      ctx.ellipse(u, 256, 62, 62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#141414';
+      ctx.font = `800 ${n > 9 ? 64 : 76}px Inter, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(n), u, 262);
+      if (n === 6 || n === 9) ctx.fillRect(u - 18, 300, 36, 6);
+    }
   });
 }
 
