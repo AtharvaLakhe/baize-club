@@ -60,7 +60,7 @@ export type HostMsg =
   | { t: 'react'; from: string; name: string; emoji: string }
   | { t: 'notice'; text: string };
 
-export const PEER_PREFIX = 'baizeclub-v1-';
+export const PEER_PREFIX = 'obsidian-v1-';
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 export function makeCode(): string {

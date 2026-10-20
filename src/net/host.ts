@@ -6,6 +6,7 @@ import {
   activeChair, canPlaceCue, chairCount, concede, decide, nextFrame, newMatch, resolveShot, tableFor, timeOut,
   type MatchSettings, type MatchState, type Seat,
 } from '../core/rules';
+import { BOT_ID, BOT_PROFILES, planShot, type BotLevel } from '../core/ai';
 import type { ClientMsg, HostMsg, Member, Profile, RoomState } from './protocol';
 import type { Link } from './transport';
 
@@ -17,6 +18,8 @@ export class HostRoom {
   private links = new Map<Link, string | null>();
   private clockTimer: ReturnType<typeof setTimeout> | null = null;
   private clockDeadline = 0;
+  private bot: { level: BotLevel } | null = null;
+  private botTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(code: string, hostId: string, kind: RoomState['kind'], settings: MatchSettings) {
     this.room = {
@@ -37,6 +40,8 @@ export class HostRoom {
 
   destroy() {
     if (this.clockTimer) clearTimeout(this.clockTimer);
+    if (this.botTimer) clearTimeout(this.botTimer);
+    this.bot = null;
     for (const l of this.links.keys()) l.close();
     this.links.clear();
   }
@@ -55,7 +60,11 @@ export class HostRoom {
 
   /** The chair this person sits in. On a local table this device plays whoever is up. */
   private chairOf(id: string): number | null {
-    if (this.room.kind === 'local' && id === this.room.hostId) return this.match ? activeChair(this.match) : 0;
+    if (this.room.kind === 'local' && id === this.room.hostId) {
+      // The computer's chair is never ours to play.
+      if (this.match && this.room.seats[activeChair(this.match)] === BOT_ID) return this.room.seats.indexOf(id);
+      return this.match ? activeChair(this.match) : 0;
+    }
     const i = this.room.seats.indexOf(id);
     return i >= 0 && i < chairCount(this.room.settings) ? i : null;
   }
@@ -170,6 +179,7 @@ export class HostRoom {
         if (!this.match?.over) break;
         if (chair === null && !isHost) break;
         if (!this.room.rematchVotes.includes(id)) this.room.rematchVotes.push(id);
+        if (this.bot && !this.room.rematchVotes.includes(BOT_ID)) this.room.rematchVotes.push(BOT_ID);
         const seated = new Set(this.room.seats.slice(0, chairCount(this.room.settings)).filter(Boolean));
         const ready = [...seated].every((s) => this.room.rematchVotes.includes(s as string));
         if (ready) this.start();
@@ -223,6 +233,45 @@ export class HostRoom {
     this.room.seats = seats;
   }
 
+  /** Seat the computer in a local room's second chair. */
+  addBot(level: BotLevel) {
+    this.bot = { level };
+    this.room.members.push({ id: BOT_ID, ...BOT_PROFILES[level], connected: true });
+    this.room.seats[1] = BOT_ID;
+  }
+
+  /** If it's the computer's turn (or its decision), play after `delayMs`. */
+  private maybeBot(delayMs: number) {
+    if (this.botTimer) clearTimeout(this.botTimer);
+    this.botTimer = null;
+    const m = this.match;
+    const bot = this.bot;
+    if (!bot || !m || m.over || m.frame.over) return;
+    const botChair = this.room.seats.indexOf(BOT_ID);
+    const d = m.frame.decision;
+    if (d) {
+      if (d.seat === botChair % 2) {
+        const seq = m.seq;
+        this.botTimer = setTimeout(() => {
+          if (this.match?.seq === seq && this.match.frame.decision) this.setMatch(decide(this.match, 'play'));
+        }, delayMs + 900);
+      }
+      return;
+    }
+    if (activeChair(m) !== botChair) return;
+    const seq = m.seq;
+    this.botTimer = setTimeout(async () => {
+      if (this.match?.seq !== seq || !this.bot) return;
+      const plan = await planShot(this.match, bot.level);
+      if (this.match?.seq !== seq || !this.bot) return;
+      // Line it up where everyone can see, then play.
+      const aim = { dx: plan.params.dx, dy: plan.params.dy, spinX: plan.params.spinX, spinY: plan.params.spinY, cueX: plan.cueX, cueY: plan.cueY };
+      this.broadcast({ t: 'aim', seat: botChair, aim: { ...aim, pull: 0.1 } });
+      setTimeout(() => this.broadcast({ t: 'aim', seat: botChair, aim: { ...aim, pull: Math.max(0.2, plan.params.power) } }), 650);
+      setTimeout(() => this.shot(BOT_ID, seq, plan.params, plan.cueX, plan.cueY), 1300);
+    }, delayMs + 500);
+  }
+
   /** Bring a table back after the host reloads the page. */
   restore(room: RoomState, match: MatchState | null) {
     this.room = { ...room, members: room.members.map((m) => ({ ...m, connected: m.id === this.room.hostId })) };
@@ -250,6 +299,7 @@ export class HostRoom {
     this.match = m;
     this.armClock(extraMs);
     this.broadcast({ t: 'match', match: m, clockMs: this.clockLeft() });
+    this.maybeBot(extraMs + 400);
   }
 
   private shot(id: string, seq: number, params: ShotParams, cueX?: number, cueY?: number) {
@@ -262,7 +312,7 @@ export class HostRoom {
     const start = m.frame.balls.map((b) => ({ ...b }));
     if (m.frame.ballInHand) {
       if (typeof cueX !== 'number' || typeof cueY !== 'number') return;
-      if (!canPlaceCue(table, start, cueX, cueY)) return;
+      if (!canPlaceCue(table, start, cueX, cueY, m.frame.hand ?? 'D')) return;
       start[0].x = cueX; start[0].y = cueY; start[0].on = true;
     }
     const world = makeWorld(table, start);
@@ -272,6 +322,7 @@ export class HostRoom {
     this.match = result;
     this.armClock(animMs);
     this.broadcast({ t: 'shot', seq, start, params, result, clockMs: this.clockLeft() });
+    this.maybeBot(animMs + 300);
   }
 
   // ----- shot clock -------------------------------------------------------------------------
