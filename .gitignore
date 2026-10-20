@@ -1,0 +1,9 @@
+node_modules
+dist
+.vercel
+*.log
+.DS_Store
+graphify-out
+.playwright-mcp
+
+LAUNCH_KIT.md
