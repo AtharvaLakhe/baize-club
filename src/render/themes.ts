@@ -62,4 +62,13 @@ export const BALL_COLORS: Record<string, { base: string; light: string; dark: st
   black: { base: '#17161a', light: '#6b6a72', dark: '#000000', label: '7', ink: '#fff' },
 };
 
+/** Pool ball colours by number; 9-15 reuse 1-7 as stripes. */
+export const POOL_COLORS: Record<number, string> = {
+  1: '#f2c014', 2: '#1d4fc0', 3: '#d42a2a', 4: '#5d2b8f', 5: '#f0701c', 6: '#13804a', 7: '#7c2020', 8: '#121212',
+};
+
+export function poolColor(n: number): string {
+  return POOL_COLORS[n > 8 ? n - 8 : n];
+}
+
 export const AVATARS = ['🦊', '🐼', '🦉', '🐯', '🐸', '🐙', '🦄', '🐻', '🐧', '🦁', '🐨', '🐲', '🦩', '🐺', '🦔', '🐳'];
