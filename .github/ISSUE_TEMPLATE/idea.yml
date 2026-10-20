@@ -1,0 +1,9 @@
+name: Idea
+description: A cloth, a cue, a house rule, a mode
+labels: [idea]
+body:
+  - type: textarea
+    attributes:
+      label: What would you like at the table?
+    validations:
+      required: true
