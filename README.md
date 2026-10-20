@@ -1,11 +1,11 @@
 <div align="center">
 
-<a href="https://baize-club.vercel.app"><img src="public/og.png" alt="Baize Club: a 3D snooker table seen from behind the cue ball" width="100%"></a>
+<a href="https://baize-club.vercel.app"><img src="public/og.png" alt="Obsidian landing page over a live 3D snooker table" width="100%"></a>
 
-# Baize Club
+# Obsidian
 
-**Private online snooker for you and your friends.**
-Open a table, send the link, play. No accounts, no downloads, no lobbies full of strangers.
+**Private online snooker and 8-ball pool for you and your friends.**
+Open a table, send the link, play. Or take on the computer. No accounts, no downloads, no lobbies full of strangers.
 
 [![Play now](https://img.shields.io/badge/Play%20now-baize--club.vercel.app-d4b06a?style=for-the-badge&labelColor=1d1510)](https://baize-club.vercel.app)
 [![Stars](https://img.shields.io/github/stars/AtharvaLakhe/baize-club?style=for-the-badge&color=d4b06a&labelColor=1d1510)](https://github.com/AtharvaLakhe/baize-club/stargazers)
@@ -18,21 +18,24 @@ Open a table, send the link, play. No accounts, no downloads, no lobbies full of
 
 ## Why
 
-Every online snooker game wants you to sign up, grind levels and play strangers. Sometimes you just want to play your mate across town. Baize Club is a private table you can open in a couple of seconds: the link *is* the invite.
+Every online snooker and pool game wants you to sign up, grind levels and play strangers. Sometimes you just want to play your mate across town. Obsidian is a private table you can open in a couple of seconds: the link *is* the invite.
 
 ## What's in it
 
-**Proper snooker**
-- Full rules: reds and colours, fouls valued correctly, colours respotted to the right spot (or the highest free one), free ball when you're snookered after a foul, *put him back in*, and a re-spotted black on a tie.
-- 15, 10, 6 or 3 reds, single frames or best of 3, 5 or 7.
-- **Singles (1 v 1) or doubles (2 v 2)** with real doubles rotation: A1, B1, A2, B2.
+**Two games, properly ruled**
+- **Snooker:** reds and colours, fouls valued correctly, colours respotted to the right spot (or the highest free one), free ball when you're snookered after a foul, *put him back in*, and a re-spotted black on a tie. 15, 10, 6 or 3 reds.
+- **8-ball pool:** on a 9-foot table with numbered solids (1–7), stripes (9–15) and the 8. Break from the kitchen, open table until the first legal pot, ball in hand anywhere after a foul, and the 8 last. Sink it early and you lose.
+- Single frames or best of 3, 5 or 7. **Singles (1 v 1) or doubles (2 v 2)** with real doubles rotation: A1, B1, A2, B2.
+
+**A computer that actually plays**
+- Easy, Medium or Hard. It doesn't fake it: every candidate shot is played out with the real physics and scored with the real rules, and it plays safe when nothing is on. The harder levels look further ahead and wobble less.
 
 **It feels like a shot**
 - Spin-aware physics: the cue ball slides, then rolls. Screw back, follow through, stun, and side that bends off the cushions.
-- Real 3D table built from the same geometry the physics uses, with lamp-lit clear-coated balls and a broadcast cue ball whose red spots show the spin.
+- Real 3D table built from the same geometry the physics uses: lamp-lit clear-coated balls, numbers that roll with the pool balls, diamond sights on the pool rails, and a spotted cue ball that shows the spin.
 - A cue that winds back, drives through and follows through. Chalk dust, impact flashes, hit-stop on big contacts, camera shake on a full-power break.
 - Layered synthesized audio (no sound files): the tip's *thock*, resin clacks, cushion thumps, the pocket drop, a rolling rumble and a little room reverb.
-- Two cameras: **player view** behind the cue, or **overhead** for planning. Press `C` to switch.
+- Familiar controls: a power bar on one edge and a fine-aim wheel and spin ball on the other, swapped for left-handers.
 
 **Yours**
 - Seven cloths (championship green, tournament blue, claret, plum, slate, saffron, midnight neon) and seven cues.
@@ -43,14 +46,14 @@ Every online snooker game wants you to sign up, grind levels and play strangers.
 - Invite by link, code or QR. Extra people who join watch.
 - Your opponent's cue moves live as they line up.
 - Chat, emoji reactions, instant replay at half speed, and a result card you can share after the match.
-- Practice alone, or pass-and-play on one device.
+- Practice alone, play the computer, or pass-and-play on one device.
 
 <p align="center">
-  <img src="docs/media/home.png" width="49%" alt="Home screen over a slowly orbiting 3D table">
-  <img src="docs/media/lobby.png" width="49%" alt="Lobby with invite link, QR code and house rules">
+  <img src="docs/media/snooker.png" width="49%" alt="A snooker frame after the break">
+  <img src="docs/media/pool.png" width="49%" alt="An 8-ball game with numbered solids and stripes">
 </p>
 <p align="center">
-  <img src="docs/media/player-view.png" width="74%" alt="Player view from behind the cue ball">
+  <img src="docs/media/home.png" width="74%" alt="The landing page over a slowly orbiting 3D table">
   <img src="docs/media/mobile.png" width="24%" alt="Phone layout">
 </p>
 
@@ -81,11 +84,13 @@ If the host reloads, the table reopens on the same code and friends can rejoin w
 
 | | Desktop | Phone |
 |---|---|---|
-| Aim | Move the mouse (hold `Shift` for fine aim), or arrow keys | Drag on the table |
-| Power and shoot | Click and drag back, let go. Or drag the power bar | Drag the power bar, let go |
-| Spin | Click the cue ball in the dock (`W A S D` when focused) | Tap the cue ball in the dock |
-| Camera | `C` | Camera button |
-| Ball in hand | Drag the cue ball inside the D | Same |
+| Aim | Point with the mouse (hold `Shift` for fine aim) | Touch the table where you want to aim |
+| Fine aim | The ridged wheel, the mouse wheel, or the arrow keys | Drag the ridged wheel |
+| Power and shoot | Drag the power bar down and let go, or click and drag back on the table | Drag the power bar down, let go |
+| Spin | Click the white ball (`W A S D` when focused) | Tap the white ball |
+| Ball in hand | Drag the cue ball: in the D (snooker), behind the line (pool break) or anywhere (pool foul) | Same |
+
+Left-handed? Turn on *Left-handed controls* in the menu to swap the power bar and the aim wheel.
 
 ## Run it locally
 
@@ -104,13 +109,13 @@ Open two tabs to play yourself online.
 
 ```
 src/
-  core/      table geometry, physics, rules, aim prediction: pure and tested
+  core/      table geometry, physics, snooker and 8-ball rules, computer opponent: pure and tested
   net/       protocol, host authority, PeerJS transport, client session
   game/      real-time shot playback and ball orientation
   render/    three.js table, balls, cue, effects, themes
   audio/     synthesized sound
   ui/        home, lobby, game screen, share card
-tests/       vitest suites for physics and rules
+tests/       vitest suites for physics, both rulebooks and the computer opponent
 ```
 
 More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -119,8 +124,7 @@ More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Ideas, bug reports and pull requests are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Things that would be lovely:
 
-- A computer opponent for practice
-- Pool (8-ball and 9-ball) on the same engine
+- 9-ball and straight pool on the same engine
 - Swerve and masse
 - A trick-shot editor with shareable layouts
 - More cloths and cues
@@ -129,7 +133,7 @@ Ideas, bug reports and pull requests are very welcome. See [CONTRIBUTING.md](CON
 
 Made by **[Atharva Lakhe](https://github.com/AtharvaLakhe)**.
 
-If Baize Club made you smile, a ⭐ helps other people find it.
+If Obsidian made you smile, a ⭐ helps other people find it.
 
 ## License
 

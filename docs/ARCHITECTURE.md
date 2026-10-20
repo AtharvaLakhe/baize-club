@@ -1,6 +1,6 @@
 # Architecture
 
-Baize Club is a static site. Everything, including the authoritative game logic, runs in the players' browsers.
+Obsidian is a static site. Everything, including the authoritative game logic, runs in the players' browsers.
 
 ## Layers
 
@@ -42,7 +42,7 @@ player ──shot──▶ host: simulate → resolveShot → broadcast {shot, s
 ```
 
 - The host's own UI is just another client over a loopback link, so there is one code path.
-- Room codes are six characters; the PeerJS id is `baizeclub-v1-<code>`.
+- Room codes are six characters; the PeerJS id is `obsidian-v1-<code>`.
 - Client ids live in `sessionStorage`, so two tabs are two players and a reload keeps your chair.
 - The host saves the room and match to `sessionStorage`; reloading reopens the same code.
 

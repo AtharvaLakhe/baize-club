@@ -1,4 +1,4 @@
-# Contributing to Baize Club
+# Contributing to Obsidian
 
 Thanks for wanting to help. Small fixes and big ideas are both welcome.
 
