@@ -53,25 +53,26 @@ export class ShotAnimator {
       this.events.length = 0;
       step(this.world, this.events);
       for (const b of this.world.balls) this.orients.spin(b, this.table.R, DT);
+      const pan = (x: number) => ((x / this.table.L) * 2 - 1) * 0.7;
       for (const e of this.events) {
         const balls = this.world.balls;
         if (e.type === 'ball') {
-          if (this.sound) sfx.ball(e.speed);
           const a = balls[e.a], b = balls[e.b];
+          if (this.sound) sfx.ball(e.speed, pan((a.x + b.x) / 2));
           this.opts.onImpact?.({ kind: 'ball', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, speed: e.speed });
           if (this.firstContact && e.speed > 1800 && this.speed >= 1) {
             this.freezeUntil = now + Math.min(90, 30 + e.speed / 80);
           }
           this.firstContact = false;
         } else if (e.type === 'cushion') {
-          if (this.sound) sfx.cushion(e.speed);
           const b = balls[e.id];
+          if (this.sound) sfx.cushion(e.speed, pan(b.x));
           this.opts.onImpact?.({ kind: 'cushion', x: b.x, y: b.y, speed: e.speed });
         } else if (e.type === 'pot') {
           const b = balls[e.id];
           const pk = this.table.pockets[e.pocket];
-          this.pots.push({ id: b.id, kind: b.kind, x: b.x, y: b.y, hx: pk.hx, hy: pk.hy, t0: now });
-          if (this.sound) sfx.pot(e.speed);
+          this.pots.push({ id: b.id, kind: b.kind, x: b.x, y: b.y, vx: e.vx, vy: e.vy, hx: pk.hx, hy: pk.hy, hr: pk.hr, t0: now });
+          if (this.sound) sfx.pot(e.speed, pan(pk.hx));
           this.opts.onImpact?.({ kind: 'pot', x: pk.hx, y: pk.hy, speed: e.speed });
         }
       }
