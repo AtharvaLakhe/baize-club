@@ -193,6 +193,13 @@ export function step(world: World, out?: SimEvent[]): void {
     if (!b.on) continue;
     for (let p = 0; p < table.pockets.length; p++) {
       const pk = table.pockets[p];
+      // A ball falls once its centre is over the hole: nothing is holding it up any more.
+      const hx = b.x - pk.hx, hy = b.y - pk.hy;
+      const edge = pk.hr - R * 0.5;
+      if (hx * hx + hy * hy < edge * edge) {
+        pot(world, b, p, out);
+        break;
+      }
       const rx = b.x - pk.mx, ry = b.y - pk.my;
       const depth = rx * pk.nx + ry * pk.ny;
       if (depth <= pk.drop) continue;

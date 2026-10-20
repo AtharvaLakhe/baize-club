@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTable } from '../src/core/table';
-import { makeWorld, simulate, type Ball, type ShotParams } from '../src/core/physics';
+import { makeWorld, simulate, step, type Ball, type ShotParams } from '../src/core/physics';
 import { rack, DEFAULT_SETTINGS } from '../src/core/rules';
 
 const table = buildTable();
@@ -85,5 +85,39 @@ describe('physics', () => {
       expect(b.y).toBeLessThanOrEqual(table.W - R + 0.5);
     }
     expect(w.time).toBeLessThan(60);
+  });
+});
+
+describe('pockets', () => {
+  it('a ball resting with its centre over the hole drops', () => {
+    for (const game of ['snooker', 'pool8'] as const) {
+      const t = buildTable(undefined, game);
+      const pk = t.pockets[1]; // top-right corner
+      const w = makeWorld(t, [ball(0, 'cue', t.L / 2, t.W / 2), ball(1, 'red', pk.mx - pk.nx * 2, pk.my - pk.ny * 2)]);
+      step(w);
+      expect(w.balls[1].on).toBe(false);
+    }
+  });
+
+  it('a ball on the cloth beside a corner stays up', () => {
+    for (const game of ['snooker', 'pool8'] as const) {
+      const t = buildTable(undefined, game);
+      const w = makeWorld(t, [ball(0, 'cue', t.L / 2, t.W / 2), ball(1, 'red', t.L - 140, t.R + 1)]);
+      step(w);
+      expect(w.balls[1].on).toBe(true);
+    }
+  });
+
+  it('a slow ball rolled into a pool corner falls instead of stopping in the jaws', () => {
+    const t = buildTable(undefined, 'pool8');
+    const b = ball(1, 'red', t.L - 300, 300);
+    const w = makeWorld(t, [ball(0, 'cue', t.L / 2, t.W - 100), b]);
+    // Send the object ball straight at the pocket, just hard enough to arrive.
+    const target = t.pockets[1];
+    const dx = target.mx - b.x, dy = target.my - b.y, d = Math.sqrt(dx * dx + dy * dy);
+    w.balls[1].vx = (dx / d) * 520; w.balls[1].vy = (dy / d) * 520;
+    w.balls[1].sx = -w.balls[1].vx; w.balls[1].sy = -w.balls[1].vy;
+    for (let i = 0; i < 20000 && w.balls[1].on && (w.balls[1].vx || w.balls[1].vy); i++) step(w);
+    expect(w.balls[1].on).toBe(false);
   });
 });
