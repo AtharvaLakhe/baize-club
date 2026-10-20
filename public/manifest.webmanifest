@@ -1,7 +1,7 @@
 {
-  "name": "Baize Club",
-  "short_name": "Baize Club",
-  "description": "Private online snooker for you and your friends.",
+  "name": "Obsidian",
+  "short_name": "Obsidian",
+  "description": "Private online snooker and 8-ball pool for you and your friends.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

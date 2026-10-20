@@ -8,7 +8,9 @@ export interface Prefs {
   profile: Profile;
   sound: number;
   ballLabels: boolean;
-  camera: 'overview' | 'player';
+  leftHanded: boolean;
+  seenHowTo: boolean;
+  lastBot: string;
   lastSettings: MatchSettings;
 }
 
@@ -23,7 +25,9 @@ function defaults(): Prefs {
     },
     sound: 0.8,
     ballLabels: false,
-    camera: 'player',
+    leftHanded: false,
+    seenHowTo: false,
+    lastBot: 'medium',
     lastSettings: DEFAULT_SETTINGS,
   };
 }

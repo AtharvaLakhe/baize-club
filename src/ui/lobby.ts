@@ -3,10 +3,11 @@
 import QRCode from 'qrcode';
 import { chairCount, type MatchSettings, type Mutators, type Seat } from '../core/rules';
 import type { Session } from '../net/session';
-import { prefs, profileForWire, savePrefs } from '../prefs';
+import { profileForWire, savePrefs } from '../prefs';
 import { TABLE_THEMES } from '../render/themes';
-import { cuePicker } from './cuepreview';
 import { chipGroup, copyText, h, toast } from './dom';
+import { icon } from './icons';
+import { openProfile, switchRow } from './profile';
 
 const MUTATORS: Array<{ key: keyof Mutators; name: string; text: string }> = [
   { key: 'bigPockets', name: 'Bucket pockets', text: 'Pockets almost half as wide again. Good for beginners and long pots.' },
@@ -14,8 +15,6 @@ const MUTATORS: Array<{ key: keyof Mutators; name: string; text: string }> = [
   { key: 'rubberCushions', name: 'Rubber cushions', text: 'Cushions give back nearly everything you put in.' },
   { key: 'miniBalls', name: 'Marbles', text: 'Balls shrink by a fifth. The pockets suddenly look huge.' },
 ];
-
-let cueOpen = false;
 
 export function inviteUrl(code: string) {
   return `${location.origin}/t/${code}`;
@@ -37,27 +36,25 @@ export function buildLobby(session: Session, hooks: { leave(): void; preview(s: 
 
   // ---- invite
   const qr = h('div.qr', { title: 'Scan to join from a phone' });
-  const qrImg = h('img', { alt: 'QR code for the invite link', width: 92, height: 92 }) as HTMLImageElement;
+  const qrImg = h('img', { alt: 'QR code for the invite link', width: 84, height: 84 }) as HTMLImageElement;
   qr.append(qrImg);
-  QRCode.toDataURL(url, { margin: 0, width: 184, color: { dark: '#1b1410', light: '#efe6d2' } })
+  QRCode.toDataURL(url, { margin: 0, width: 168, color: { dark: '#0b110f', light: '#f1f5f2' } })
     .then((d) => { qrImg.src = d; })
     .catch(() => qr.remove());
 
-  const shareText = `Pull up a chair, I've opened a snooker table on Baize Club: ${url}`;
-  const invite = h('section', {},
-    h('div.invite', {},
-      h('div', { style: 'display:grid; gap:10px; min-width:0' },
-        h('div', {}, h('div', { style: 'color: var(--muted); font-size: .85rem' }, 'Table code'), h('div.code', {}, room.code)),
-        h('div.link-box', {}, url),
-        h('div.row', {},
-          h('button.btn.btn-sm', { type: 'button', onclick: async () => toast((await copyText(url)) ? 'Invite link copied.' : 'Copy failed. Select the link instead.') }, 'Copy link'),
-          'share' in navigator
-            ? h('button.btn.btn-sm', { type: 'button', onclick: () => navigator.share({ title: 'Baize Club', text: shareText, url }).catch(() => {}) }, 'Share')
-            : null,
-        ),
+  const shareText = `Pull up a chair, I've opened a ${s.game === 'pool8' ? 'pool' : 'snooker'} table on Obsidian: ${url}`;
+  const invite = h('section.invite', { 'aria-label': 'Invite' },
+    h('div', { style: 'display:grid; gap:10px; min-width:0' },
+      h('div', {}, h('div.label', {}, 'Table code'), h('div.code', {}, room.code)),
+      h('div.link-box', {}, url.replace(/^https?:\/\//, '')),
+      h('div.row', {},
+        h('button.btn.btn-sm', { type: 'button', onclick: async () => toast((await copyText(url)) ? 'Invite link copied.' : 'Copy failed. Select the link instead.') }, icon('copy', 16), 'Copy link'),
+        'share' in navigator
+          ? h('button.btn.btn-sm', { type: 'button', onclick: () => navigator.share({ title: 'Obsidian', text: shareText, url }).catch(() => {}) }, icon('share', 16), 'Share')
+          : null,
       ),
-      qr,
     ),
+    qr,
   );
 
   // ---- chairs, grouped by side: chairs are [A1, B1, A2, B2]
@@ -67,16 +64,16 @@ export function buildLobby(session: Session, hooks: { leave(): void; preview(s: 
   const chairEl = (chair: number) => {
     const mem = memberById(room.seats[chair]);
     if (mem) {
-      const tags = [mem.id === me ? 'you' : '', mem.id === room.hostId ? 'host' : '', mem.connected ? '' : 'away'].filter(Boolean).join(', ');
+      const tags = [mem.id === me ? 'You' : '', mem.id === room.hostId ? 'Host' : '', mem.connected ? '' : 'Away'].filter(Boolean).join(' · ');
       return h('div.seat.taken', {},
-        h('span.face', {}, mem.avatar),
+        h('span.avatar', {}, mem.avatar),
         h('span.nm', {}, mem.name),
-        h('small', {}, tags || 'ready'),
+        h('small', {}, tags || 'Ready'),
         mem.id === me ? h('button.link', { type: 'button', onclick: () => session.send({ t: 'sit', seat: null }) }, 'Stand up') : null,
       );
     }
     return h('div.seat', {},
-      h('span.face.empty', { 'aria-hidden': 'true' }, '+'),
+      h('span.empty-ring', { 'aria-hidden': 'true' }, icon('user', 18)),
       h('small', {}, 'Empty chair'),
       h('button.btn.btn-sm', { type: 'button', onclick: () => session.send({ t: 'sit', seat: chair }) }, mine === -1 ? 'Sit here' : 'Move here'),
     );
@@ -92,66 +89,65 @@ export function buildLobby(session: Session, hooks: { leave(): void; preview(s: 
     );
   const watchers = room.members.filter((m) => !room.seats.slice(0, n).includes(m.id) && m.connected);
   const seated = room.seats.slice(0, n).filter(Boolean).length;
-  const need = n;
-
-  // ---- your look
-  const look = h('details.details', { open: cueOpen, ontoggle: (e: Event) => { cueOpen = (e.target as HTMLDetailsElement).open; } },
-    h('summary', {}, 'Your cue'),
-    cuePicker(prefs().profile.cue, (id) => {
-      savePrefs({ profile: { ...prefs().profile, cue: id } });
-      session.send({ t: 'profile', profile: profileForWire() });
-    }),
-  );
 
   // ---- settings
   const ro = !isHost;
+  const pool = s.game === 'pool8';
   const settings = h('section.settings', {},
     h('h2.section-title', {}, isHost ? 'House rules' : 'House rules, set by the host'),
+    fieldset('Game', chipGroup([
+      { value: 'snooker', label: 'Snooker' }, { value: 'pool8', label: '8-ball pool' },
+    ] as const, s.game ?? 'snooker', (v) => update({ game: v, tableTheme: defaultCloth(v, s.tableTheme) }), ro)),
     fieldset('Players', chipGroup([
       { value: 1, label: 'Singles, 1 v 1' }, { value: 2, label: 'Doubles, 2 v 2' },
     ], s.teamSize ?? 1, (v) => update({ teamSize: v }), ro)),
-    fieldset('Match length', chipGroup([1, 3, 5, 7].map((n) => ({ value: n, label: n === 1 ? 'One frame' : `Best of ${n}` })), s.bestOf, (v) => update({ bestOf: v }), ro)),
-    fieldset('Reds', chipGroup([15, 10, 6, 3].map((n) => ({ value: n, label: String(n) })), s.reds, (v) => update({ reds: v }), ro)),
-    fieldset('Shot clock', chipGroup([0, 20, 30, 60].map((n) => ({ value: n, label: n ? `${n}s` : 'Off' })), s.shotClock, (v) => update({ shotClock: v }), ro)),
+    fieldset('Match length', chipGroup([1, 3, 5, 7].map((k) => ({ value: k, label: k === 1 ? 'One frame' : `Best of ${k}` })), s.bestOf, (v) => update({ bestOf: v }), ro)),
+    pool ? null : fieldset('Reds', chipGroup([15, 10, 6, 3].map((k) => ({ value: k, label: String(k) })), s.reds, (v) => update({ reds: v }), ro)),
+    fieldset('Shot clock', chipGroup([0, 20, 30, 60].map((k) => ({ value: k, label: k ? `${k}s` : 'Off' })), s.shotClock, (v) => update({ shotClock: v }), ro)),
     fieldset('Aiming guide', chipGroup([
       { value: 'full', label: 'Full paths' }, { value: 'ghost', label: 'Ghost ball' }, { value: 'line', label: 'Line only' }, { value: 'off', label: 'None' },
     ] as const, s.aimGuide, (v) => update({ aimGuide: v }), ro)),
     fieldset('Cloth', swatches(s.tableTheme, (id) => update({ tableTheme: id }), ro)),
-    fieldset('Rules',
-      toggle('Free ball', 'After a foul leaves you snookered, any ball counts as the ball on.', s.freeBall, (v) => update({ freeBall: v }), ro),
-      toggle('Put them back in', 'After a foul you can make the offender play again.', s.playAgain, (v) => update({ playAgain: v }), ro),
+    pool ? null : fieldset('Rules',
+      switchRow('Free ball', 'After a foul leaves you snookered, any ball counts as the ball on.', s.freeBall, (v) => update({ freeBall: v }), ro),
+      switchRow('Put them back in', 'After a foul you can make the offender play again.', s.playAgain, (v) => update({ playAgain: v }), ro),
     ),
     fieldset('Party rules',
-      ...MUTATORS.map((m) => toggle(m.name, m.text, s.mutators[m.key], (v) => update({ mutators: { ...s.mutators, [m.key]: v } }), ro)),
+      ...MUTATORS.map((m) => switchRow(m.name, m.text, s.mutators[m.key], (v) => update({ mutators: { ...s.mutators, [m.key]: v } }), ro)),
     ),
   );
 
   const startBtn = isHost
-    ? h('button.btn.btn-brass', { type: 'button', disabled: seated < need, onclick: () => session.send({ t: 'start' }), style: 'min-height:52px' }, seated < need ? `Waiting for players: ${seated} of ${need} seated` : 'Start the match')
+    ? h('button.btn.btn-gold.btn-lg.btn-block', { type: 'button', disabled: seated < n, onclick: () => session.send({ t: 'start' }) },
+      seated < n ? `Waiting for players: ${seated} of ${n}` : h('span', { style: 'display:inline-flex;gap:8px;align-items:center' }, icon('play', 18), 'Start the match'))
     : h('p.status-line', {}, `Waiting for ${memberById(room.hostId)?.name ?? 'the host'} to start.`);
 
   return h('aside.lobby.panel', { 'aria-label': 'Table lobby' },
-    h('div', { style: 'display:flex; justify-content:space-between; align-items:start; gap:12px' },
-      h('h1', {}, isHost ? 'Your table is open' : `${memberById(room.hostId)?.name ?? 'A friend'}'s table`),
-      h('button.btn.btn-sm.btn-ghost', { type: 'button', onclick: () => hooks.leave() }, 'Leave'),
+    h('div.lobby-head', {},
+      h('div', {},
+        h('h1', {}, isHost ? 'Your table is open' : `${memberById(room.hostId)?.name ?? 'A friend'}'s table`),
+        isHost ? h('p.lede-sm', {}, n === 4 ? 'Send the link to three friends. Each takes an empty chair; anyone after that watches.' : 'Send the link to a friend. Whoever opens it sits opposite you; anyone after that watches.') : null,
+      ),
+      h('button.icon-btn', { type: 'button', 'aria-label': 'Leave the table', title: 'Leave', onclick: () => hooks.leave() }, icon('logout', 18)),
     ),
-    isHost ? h('p.lede-sm', {}, n === 4 ? 'Send the link to three friends. Each one takes an empty chair; anyone after that watches.' : 'Send the link to a friend. Whoever opens it sits down opposite you; anyone after that watches.') : null,
     invite,
     seats,
-    watchers.length ? h('div.watchers', {}, `Watching: ${watchers.map((w) => `${w.avatar} ${w.name}`).join(', ')}`) : null,
+    watchers.length ? h('div.watchers', {}, h('span', { style: 'display:inline-flex;gap:6px;align-items:center' }, icon('eye', 16), `Watching: ${watchers.map((w) => w.name).join(', ')}`)) : null,
     startBtn,
-    look,
+    h('button.btn.btn-ghost.btn-sm', { type: 'button', style: 'justify-self:start', onclick: () => openProfile({ onChange: () => session.send({ t: 'profile', profile: profileForWire() }) }) }, icon('edit', 16), 'Change your name, picture or cue'),
     settings,
   );
 }
 
-function fieldset(legend: string, ...children: HTMLElement[]) {
-  return h('fieldset', {}, h('legend', {}, legend), ...children);
+/** Pool tables are traditionally blue and snooker green; follow that unless a custom cloth was picked. */
+export function defaultCloth(game: 'snooker' | 'pool8', current: string): string {
+  if (game === 'pool8' && current === 'championship') return 'tournament';
+  if (game === 'snooker' && current === 'tournament') return 'championship';
+  return current;
 }
 
-function toggle(name: string, text: string, value: boolean, onChange: (v: boolean) => void, disabled: boolean) {
-  const input = h('input', { type: 'checkbox', checked: value, disabled, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) });
-  return h('label.toggle', {}, input, h('span', {}, h('b', {}, name), h('small', {}, text)));
+function fieldset(legend: string, ...children: HTMLElement[]) {
+  return h('fieldset', {}, h('legend', {}, legend), ...children);
 }
 
 function swatches(current: string, onPick: (id: string) => void, disabled: boolean) {
@@ -163,7 +159,7 @@ function swatches(current: string, onPick: (id: string) => void, disabled: boole
       'aria-label': t.name,
       'aria-pressed': String(t.id === current),
       disabled,
-      style: `background: radial-gradient(circle at 40% 35%, ${t.clothLight}, ${t.cloth} 70%); border-color: ${t.rail}; box-shadow: 0 0 0 3px ${t.rail} inset, 0 0 0 4px ${t.trim} inset`,
+      style: `background: radial-gradient(circle at 40% 35%, ${t.clothLight}, ${t.cloth} 70%); box-shadow: inset 0 0 0 4px ${t.rail}, inset 0 0 0 5px ${t.trim}`,
       onclick: () => onPick(t.id),
     }));
   }
