@@ -1,0 +1,14 @@
+name: Bug report
+description: Something on the table didn't behave
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Device and browser
+      placeholder: e.g. iPhone 15, Safari 18
