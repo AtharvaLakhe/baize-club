@@ -18,6 +18,28 @@ function afterBreak(): MatchState {
 }
 
 describe('8-ball', () => {
+  it.each([0, 1] as const)('keeps solids with breaker %s after the first legal break pot', (breaker) => {
+    const m = newMatch(settings, breaker);
+    const one = byNum(m, 1);
+    const breakResult = resolveShot(m, rec(one, [one]), pot(m, [one]));
+    expect(breakResult.frame.pool!.groups[breaker]).toBe('solid');
+    expect(breakResult.frame.pool!.groups[1 - breaker]).toBe('stripe');
+    expect(breakResult.frame.scores[breaker]).toBe(1);
+    const three = byNum(breakResult, 3);
+    const next = resolveShot(breakResult, rec(three, [three]), pot(breakResult, [three]));
+    expect(next.frame.turn).toBe(breaker);
+    expect(next.frame.scores[breaker]).toBe(2);
+    expect(next.frame.scores[1 - breaker]).toBe(0);
+  });
+
+  it('does not assign groups on a scratched break', () => {
+    const m = newMatch(settings, 0);
+    const one = byNum(m, 1);
+    const n = resolveShot(m, rec(one, [one, 0]), pot(m, [one, 0]));
+    expect(n.frame.pool!.groups).toEqual([null, null]);
+    expect(n.frame.turn).toBe(1);
+  });
+
   it('racks fifteen with the 8 in the middle and mixed back corners', () => {
     const balls = rackPool(table);
     const objects = balls.filter((b) => b.kind === 'pool');

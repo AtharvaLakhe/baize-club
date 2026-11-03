@@ -20,7 +20,7 @@ export function inviteUrl(code: string) {
   return `${location.origin}/t/${code}`;
 }
 
-export function buildLobby(session: Session, hooks: { leave(): void; preview(s: MatchSettings): void }): HTMLElement {
+export function buildLobby(session: Session, hooks: { leave(): void; preview(s: MatchSettings): void; tab: 'players' | 'rules'; selectTab(tab: 'players' | 'rules'): void }): HTMLElement {
   const room = session.room!;
   const me = session.you;
   const isHost = room.hostId === me;
@@ -122,6 +122,15 @@ export function buildLobby(session: Session, hooks: { leave(): void; preview(s: 
       seated < n ? `Waiting for players: ${seated} of ${n}` : h('span', { style: 'display:inline-flex;gap:8px;align-items:center' }, icon('play', 18), 'Start the match'))
     : h('p.status-line', {}, `Waiting for ${memberById(room.hostId)?.name ?? 'the host'} to start.`);
 
+  const tabs = h('div.tabs.lobby-tabs', { role: 'tablist', 'aria-label': 'Table setup' }, ...(['players', 'rules'] as const).map((tab) =>
+    h('button', { id: `lobby-${tab}-tab`, type: 'button', role: 'tab', tabindex: hooks.tab === tab ? 0 : -1, 'aria-selected': String(hooks.tab === tab), 'aria-controls': `lobby-${tab}-panel`, onclick: () => hooks.selectTab(tab), onkeydown: (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault(); hooks.selectTab(tab === 'players' ? 'rules' : 'players');
+    } }, tab === 'players' ? 'Players & invite' : 'House rules')));
+  const players = h('div.lobby-players', {}, invite, seats,
+    watchers.length ? h('div.watchers', {}, icon('eye', 16), `Watching: ${watchers.map((w) => w.name).join(', ')}`) : null,
+    h('button.btn.btn-ghost.btn-sm', { type: 'button', onclick: () => openProfile({ onChange: () => session.send({ t: 'profile', profile: profileForWire() }) }) }, icon('edit', 16), 'Edit your profile'));
+
   return h('aside.lobby.panel', { 'aria-label': 'Table lobby' },
     h('div.lobby-head', {},
       h('div', {},
@@ -130,12 +139,9 @@ export function buildLobby(session: Session, hooks: { leave(): void; preview(s: 
       ),
       h('button.icon-btn', { type: 'button', 'aria-label': 'Leave the table', title: 'Leave', onclick: () => hooks.leave() }, icon('logout', 18)),
     ),
-    invite,
-    seats,
-    watchers.length ? h('div.watchers', {}, h('span', { style: 'display:inline-flex;gap:6px;align-items:center' }, icon('eye', 16), `Watching: ${watchers.map((w) => w.name).join(', ')}`)) : null,
-    startBtn,
-    h('button.btn.btn-ghost.btn-sm', { type: 'button', style: 'justify-self:start', onclick: () => openProfile({ onChange: () => session.send({ t: 'profile', profile: profileForWire() }) }) }, icon('edit', 16), 'Change your name, picture or cue'),
-    settings,
+    tabs,
+    h('div.lobby-content', { role: 'tabpanel', id: `lobby-${hooks.tab}-panel`, 'aria-labelledby': `lobby-${hooks.tab}-tab` }, hooks.tab === 'players' ? players : settings),
+    h('div.lobby-foot', {}, h('span', {}, `${s.game === 'pool8' ? '8-ball pool' : 'Snooker'} / ${s.teamSize === 2 ? 'Doubles' : 'Singles'} / ${s.bestOf === 1 ? 'One frame' : `Best of ${s.bestOf}`}`), startBtn),
   );
 }
 

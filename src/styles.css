@@ -1,27 +1,27 @@
-/* Obsidian design tokens. Dark felt-shadow surfaces, felt green for state, gold for the one
-   thing you should press. Inter everywhere; tabular numbers for scores. */
+/* Shared Obsidian controls and table-room primitives. Club tokens carry across every screen. */
 :root {
-  --bg: #0b110f;
-  --bg-2: #0f1714;
-  --surface: #141e1a;
-  --surface-2: #1a2621;
-  --surface-3: #22302a;
+  --bg: #111312;
+  --bg-2: #151815;
+  --surface: #1b1e1b;
+  --surface-2: #252a24;
+  --surface-3: #333b30;
   --border: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.14);
-  --text: #f1f5f2;
-  --text-2: #a9b8b0;
-  --text-3: #74857c;
+  --text: #eee9dc;
+  --text-2: #aeb7aa;
+  --text-3: #969f90;
   --felt: #15803d;
   --felt-hi: #22c55e;
   --felt-soft: rgba(34, 197, 94, 0.14);
-  --gold: #e7b04a;
-  --gold-hi: #f6cb72;
+  --gold: #c6a66b;
+  --gold-hi: #debf86;
   --gold-ink: #2a1d05;
   --red: #ef4444;
   --red-soft: rgba(239, 68, 68, 0.14);
   --amber: #f59e0b;
 
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Cormorant Garamond', Georgia, serif;
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 18px;
@@ -233,98 +233,6 @@ a { color: inherit; }
 .steps li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; counter-increment: s; color: var(--text-2); }
 .steps li::before { content: counter(s); width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-3); color: var(--text); font-weight: 700; font-size: 0.9rem; }
 .steps b { color: var(--text); }
-
-/* ================================================================== landing */
-
-.site { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; }
-.wrap { width: min(1180px, 100% - 40px); margin: 0 auto; }
-
-.nav {
-  position: sticky; top: 0; z-index: 20;
-  background: linear-gradient(180deg, rgba(11, 17, 15, 0.9), rgba(11, 17, 15, 0.6));
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-}
-.nav .wrap { display: flex; align-items: center; gap: 24px; height: 68px; }
-.logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.12rem; letter-spacing: -0.02em; text-decoration: none; }
-/* A polished black ball: the obsidian stone. */
-.logo-ball { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 32% 26%, #fff 0 6%, rgba(255, 255, 255, 0.35) 9%, rgba(120, 110, 150, 0.35) 18%, #1b1a20 46%, #050506 80%); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 -3px 6px rgba(231, 176, 74, 0.25); }
-.nav-links { display: flex; gap: 4px; margin-left: 12px; }
-.nav-links a { padding: 8px 12px; border-radius: 10px; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 0.94rem; transition: color 0.15s, background 0.15s; }
-.nav-links a:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
-.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.me-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; min-height: 44px; border-radius: 999px; border: 1px solid var(--border-2); background: rgba(255, 255, 255, 0.03); font-weight: 600; font-size: 0.9rem; }
-.me-chip:hover { background: rgba(255, 255, 255, 0.07); }
-
-.hero { position: relative; min-height: min(860px, calc(100dvh - 68px)); display: grid; align-items: center; overflow: hidden; isolation: isolate; }
-.hero canvas.attract { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
-.hero::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(11, 17, 15, 0.96) 0%, rgba(11, 17, 15, 0.82) 30%, rgba(11, 17, 15, 0.15) 62%, rgba(11, 17, 15, 0) 100%),
-    linear-gradient(180deg, rgba(11, 17, 15, 0) 70%, var(--bg) 100%); }
-.hero-copy { max-width: 560px; padding: 48px 0 72px; display: grid; gap: 26px; }
-.pill-tag { display: inline-flex; align-items: center; gap: 8px; justify-self: start; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(34, 197, 94, 0.35); background: rgba(34, 197, 94, 0.1); color: #b6f0c9; font-size: 0.85rem; font-weight: 600; }
-.pill-tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--felt-hi); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2); }
-.hero h1 { margin: 0; font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1.02; font-weight: 800; letter-spacing: -0.04em; }
-.hero h1 em { font-style: normal; color: var(--gold); }
-.hero .sub { margin: 0; font-size: 1.15rem; color: var(--text-2); max-width: 46ch; line-height: 1.55; }
-.hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; }
-.game-seg { justify-self: start; }
-.join-row { display: flex; gap: 8px; max-width: 420px; }
-.join-row .input { flex: 1; min-width: 0; }
-.trust { display: flex; flex-wrap: wrap; gap: 18px; color: var(--text-3); font-size: 0.88rem; font-weight: 500; }
-.trust span { display: inline-flex; align-items: center; gap: 6px; }
-.trust .icon { color: var(--felt-hi); }
-.notice-bar { padding: 12px 14px; border-radius: var(--r-md); background: var(--red-soft); border: 1px solid rgba(239, 68, 68, 0.35); color: #fecaca; font-size: 0.93rem; }
-
-.section { padding: 96px 0; }
-.section-head { display: grid; gap: 12px; max-width: 640px; margin-bottom: 44px; }
-.section-head h2 { margin: 0; font-size: clamp(1.9rem, 3.6vw, 2.7rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
-.section-head p { margin: 0; color: var(--text-2); font-size: 1.08rem; }
-.kicker { color: var(--gold); font-weight: 700; font-size: 0.9rem; }
-
-.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.mode {
-  display: grid; align-content: start; gap: 14px; padding: 24px;
-  border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border);
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease), background 0.2s var(--ease);
-}
-.mode:hover { border-color: var(--border-2); transform: translateY(-3px); background: var(--surface-2); }
-.mode.featured { background: linear-gradient(180deg, rgba(21, 128, 61, 0.22), var(--surface) 60%); border-color: rgba(34, 197, 94, 0.35); }
-.mode-icon { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: var(--surface-3); color: var(--text); }
-.mode.featured .mode-icon { background: var(--felt); color: #fff; }
-.mode h3 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
-.mode p { margin: 0; color: var(--text-2); font-size: 0.95rem; }
-.mode .btn { margin-top: 6px; justify-self: start; }
-.mode .seg { justify-self: start; }
-
-.how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.how-step { padding: 26px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border); display: grid; gap: 12px; align-content: start; }
-.how-step .n { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: rgba(231, 176, 74, 0.14); color: var(--gold); font-weight: 800; }
-.how-step h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
-.how-step p { margin: 0; color: var(--text-2); }
-
-.bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
-.tile { grid-column: span 2; padding: 26px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border); display: grid; gap: 10px; align-content: start; overflow: hidden; position: relative; }
-.tile.wide { grid-column: span 3; }
-.tile.img { padding: 0; min-height: 280px; }
-.tile.img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tile .ti { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--surface-3); color: var(--felt-hi); }
-.tile h3 { margin: 4px 0 0; font-size: 1.05rem; font-weight: 700; }
-.tile p { margin: 0; color: var(--text-2); font-size: 0.95rem; }
-
-.cta-band { margin: 0 auto 96px; padding: 56px 40px; border-radius: var(--r-xl); text-align: center; display: grid; gap: 18px; justify-items: center;
-  background: radial-gradient(ellipse at 50% 0%, rgba(34, 197, 94, 0.25), rgba(21, 128, 61, 0.08) 55%, transparent 80%), var(--surface);
-  border: 1px solid rgba(34, 197, 94, 0.25); }
-.cta-band h2 { margin: 0; font-size: clamp(1.8rem, 3.4vw, 2.5rem); font-weight: 800; letter-spacing: -0.03em; }
-.cta-band p { margin: 0; color: var(--text-2); }
-
-.footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--text-3); font-size: 0.9rem; }
-.footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
-.footer a { color: var(--text-2); text-decoration: none; }
-.footer a:hover { color: var(--text); }
-.footer .links { display: flex; gap: 18px; }
 
 /* ================================================================== profile modal */
 

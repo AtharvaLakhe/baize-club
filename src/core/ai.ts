@@ -265,14 +265,30 @@ export async function planShot(m: MatchState, level: BotLevel): Promise<BotShot>
   };
 
   const positions = cuePositions(table, m).slice(0, level === 'hard' ? 8 : level === 'medium' ? 5 : 2);
-  for (const p of positions) await consider(potCandidates(table, m, p, t));
+  const opening = m.settings.game === 'snooker' && m.frame.ballInHand && m.frame.phase === 'reds' && m.lastShot === null;
+  if (opening) {
+    // A packed rack has no realistic pot. Compare a few thin-contact breaks rather than
+    // simulating hundreds of almost identical full-rack safeties on the UI thread.
+    const reds = m.frame.balls.filter((b) => b.on && b.kind === 'red');
+    const candidates: Candidate[] = [];
+    for (const side of [-1, 1]) {
+      const cue = { x: table.baulkX - table.dRadius * .25, y: table.dCenter.y + side * table.dRadius * .7 };
+      if (!canPlaceCue(table, m.frame.balls, cue.x, cue.y)) continue;
+      const edge = [...reds].sort((a, b) => side * (b.y - a.y))[0];
+      if (!edge) continue;
+      const dx = edge.x - cue.x, dy = edge.y + side * table.R * 1.4 - cue.y;
+      const length = Math.hypot(dx, dy);
+      for (const power of [.34, .46]) candidates.push({ cue, ease: 0, params: { dx: dx / length, dy: dy / length, power, spinX: side * .3, spinY: 0 } });
+    }
+    await consider(candidates);
+  } else for (const p of positions) await consider(potCandidates(table, m, p, t));
   // Nothing worth potting: play safe.
   const current = best as { c: Candidate; score: number } | null;
-  if (!current || current.score < 25) {
+  if (!current || (!opening && current.score < 25)) {
     for (const p of positions.slice(0, 3)) await consider(safetyCandidates(table, m, p, t));
   }
   const settled = best as { c: Candidate; score: number } | null;
-  if (!settled || settled.score < -30) await consider(escapeCandidates(positions[0]));
+  if (!settled || (!opening && settled.score < -30)) await consider(escapeCandidates(positions[0]));
 
   const pick = (best as { c: Candidate; score: number } | null)?.c ?? escapeCandidates(positions[0])[0];
   // Human error.

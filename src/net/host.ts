@@ -9,6 +9,7 @@ import {
 import { BOT_ID, BOT_PROFILES, planShot, type BotLevel } from '../core/ai';
 import type { ClientMsg, HostMsg, Member, Profile, RoomState } from './protocol';
 import type { Link } from './transport';
+import { isRecord, normalizeSettings } from '../core/settings';
 
 const MAX_MEMBERS = 12;
 
@@ -16,10 +17,12 @@ export class HostRoom {
   room: RoomState;
   match: MatchState | null = null;
   private links = new Map<Link, string | null>();
+  private localHostLinks = new Set<Link>();
   private clockTimer: ReturnType<typeof setTimeout> | null = null;
   private clockDeadline = 0;
   private bot: { level: BotLevel } | null = null;
-  private botTimer: ReturnType<typeof setTimeout> | null = null;
+  private botTimers = new Set<ReturnType<typeof setTimeout>>();
+  private botEpoch = 0;
 
   constructor(code: string, hostId: string, kind: RoomState['kind'], settings: MatchSettings) {
     this.room = {
@@ -32,7 +35,8 @@ export class HostRoom {
     };
   }
 
-  addLink(link: Link) {
+  addLink(link: Link, localHost = false) {
+    if (localHost) this.localHostLinks.add(link);
     this.links.set(link, null);
     link.onMessage = (m) => this.handle(link, m as ClientMsg);
     link.onClose = () => this.dropLink(link);
@@ -40,10 +44,11 @@ export class HostRoom {
 
   destroy() {
     if (this.clockTimer) clearTimeout(this.clockTimer);
-    if (this.botTimer) clearTimeout(this.botTimer);
+    this.clearBotTimers();
     this.bot = null;
     for (const l of this.links.keys()) l.close();
     this.links.clear();
+    this.localHostLinks.clear();
   }
 
   // -------------------------------------------------------------------------------------------
@@ -86,6 +91,7 @@ export class HostRoom {
   private dropLink(link: Link) {
     const id = this.links.get(link);
     this.links.delete(link);
+    this.localHostLinks.delete(link);
     if (!id) return;
     const stillLinked = [...this.links.values()].includes(id);
     const m = this.member(id);
@@ -103,7 +109,10 @@ export class HostRoom {
   private handle(link: Link, msg: ClientMsg) {
     if (!msg || typeof msg !== 'object') return;
     const id = this.links.get(link);
-    if (msg.t === 'hello') return this.hello(link, msg.clientId, msg.profile);
+    if (msg.t === 'hello') {
+      if (id === null && typeof msg.clientId === 'string' && msg.clientId.trim()) this.hello(link, msg.clientId, msg.profile);
+      return;
+    }
     if (!id) return;
     const isHost = id === this.room.hostId;
     const chair = this.chairOf(id);
@@ -130,10 +139,10 @@ export class HostRoom {
         }
         break;
       case 'settings':
-        if (isHost && this.room.status === 'lobby') {
-          this.room.settings = msg.settings;
+        if (isHost && this.room.status === 'lobby' && isRecord(msg.settings)) {
+          this.room.settings = normalizeSettings(msg.settings, this.room.settings);
           // Going from doubles to singles sends the extra players to watch.
-          const n = chairCount(msg.settings);
+          const n = chairCount(this.room.settings);
           this.room.seats = this.room.seats.map((s, i) => (i < n ? s : null));
           this.pushRoom();
         }
@@ -148,7 +157,7 @@ export class HostRoom {
         break;
       }
       case 'start':
-        if (isHost) this.start();
+        if (isHost && this.room.status === 'lobby') this.start();
         break;
       case 'shot':
         this.shot(id, msg.seq, msg.params, msg.cueX, msg.cueY);
@@ -182,7 +191,7 @@ export class HostRoom {
         if (this.bot && !this.room.rematchVotes.includes(BOT_ID)) this.room.rematchVotes.push(BOT_ID);
         const seated = new Set(this.room.seats.slice(0, chairCount(this.room.settings)).filter(Boolean));
         const ready = [...seated].every((s) => this.room.rematchVotes.includes(s as string));
-        if (ready) this.start();
+        if (ready || this.isLocalHost(id)) this.start();
         else this.pushRoom();
         break;
       }
@@ -191,6 +200,7 @@ export class HostRoom {
           this.room.status = 'lobby';
           this.match = null;
           this.stopClock();
+          this.clearBotTimers();
           this.room.members = this.room.members.filter((m) => m.connected);
           this.room.seats = this.room.seats.map((s) => (s && this.member(s) ? s : null));
           this.pushRoom();
@@ -201,6 +211,11 @@ export class HostRoom {
 
   private hello(link: Link, clientId: string, profile: Profile) {
     const id = String(clientId).slice(0, 64);
+    if ((id === this.room.hostId && !this.localHostLinks.has(link)) || id === BOT_ID) {
+      this.send(link, { t: 'notice', text: 'This player identity is reserved. Reopen the table in a new tab.' });
+      link.close();
+      return;
+    }
     let m = this.member(id);
     if (!m) {
       if (this.room.members.length >= MAX_MEMBERS) {
@@ -242,8 +257,8 @@ export class HostRoom {
 
   /** If it's the computer's turn (or its decision), play after `delayMs`. */
   private maybeBot(delayMs: number) {
-    if (this.botTimer) clearTimeout(this.botTimer);
-    this.botTimer = null;
+    this.clearBotTimers();
+    const epoch = this.botEpoch;
     const m = this.match;
     const bot = this.bot;
     if (!bot || !m || m.over || m.frame.over) return;
@@ -252,24 +267,35 @@ export class HostRoom {
     if (d) {
       if (d.seat === botChair % 2) {
         const seq = m.seq;
-        this.botTimer = setTimeout(() => {
-          if (this.match?.seq === seq && this.match.frame.decision) this.setMatch(decide(this.match, 'play'));
+        this.scheduleBot(() => {
+          if (this.match === m && this.match.seq === seq && this.match.frame.decision) this.setMatch(decide(this.match, 'play'));
         }, delayMs + 900);
       }
       return;
     }
     if (activeChair(m) !== botChair) return;
     const seq = m.seq;
-    this.botTimer = setTimeout(async () => {
-      if (this.match?.seq !== seq || !this.bot) return;
+    this.scheduleBot(async () => {
+      if (this.match !== m || !this.bot || this.botEpoch !== epoch) return;
       const plan = await planShot(this.match, bot.level);
-      if (this.match?.seq !== seq || !this.bot) return;
+      if (this.match !== m || !this.bot || this.botEpoch !== epoch) return;
       // Line it up where everyone can see, then play.
       const aim = { dx: plan.params.dx, dy: plan.params.dy, spinX: plan.params.spinX, spinY: plan.params.spinY, cueX: plan.cueX, cueY: plan.cueY };
       this.broadcast({ t: 'aim', seat: botChair, aim: { ...aim, pull: 0.1 } });
-      setTimeout(() => this.broadcast({ t: 'aim', seat: botChair, aim: { ...aim, pull: Math.max(0.2, plan.params.power) } }), 650);
-      setTimeout(() => this.shot(BOT_ID, seq, plan.params, plan.cueX, plan.cueY), 1300);
+      this.scheduleBot(() => this.broadcast({ t: 'aim', seat: botChair, aim: { ...aim, pull: Math.max(0.2, plan.params.power) } }), 650);
+      this.scheduleBot(() => this.shot(BOT_ID, seq, plan.params, plan.cueX, plan.cueY), 1300);
     }, delayMs + 500);
+  }
+
+  private scheduleBot(run: () => void, delay: number) {
+    const timer = setTimeout(() => { this.botTimers.delete(timer); run(); }, delay);
+    this.botTimers.add(timer);
+  }
+
+  private clearBotTimers() {
+    this.botEpoch++;
+    for (const timer of this.botTimers) clearTimeout(timer);
+    this.botTimers.clear();
   }
 
   /** Bring a table back after the host reloads the page. */
@@ -367,5 +393,5 @@ function validParams(p: ShotParams): boolean {
   const nums = [p.dx, p.dy, p.power, p.spinX, p.spinY];
   if (!nums.every((n) => typeof n === 'number' && Number.isFinite(n))) return false;
   const len = Math.sqrt(p.dx * p.dx + p.dy * p.dy);
-  return len > 0.99 && len < 1.01 && p.power >= 0 && p.power <= 1;
+  return len > 0.99 && len < 1.01 && p.power >= 0 && p.power <= 1 && Math.hypot(p.spinX, p.spinY) <= 1.001;
 }

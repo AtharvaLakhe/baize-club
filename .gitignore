@@ -10,3 +10,5 @@ LAUNCH_KIT.md
 
 .vercel
 .env*
+test-results/
+playwright-report/

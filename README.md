@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://baize-club.vercel.app"><img src="public/og.png" alt="Obsidian landing page over a live 3D snooker table" width="100%"></a>
+<a href="https://baize-club.vercel.app"><img src="public/og.png" alt="Obsidian club entrance with a live 3D snooker table" width="100%"></a>
 
 # Obsidian
 
@@ -24,7 +24,7 @@ Every online snooker and pool game wants you to sign up, grind levels and play s
 
 **Two games, properly ruled**
 - **Snooker:** reds and colours, fouls valued correctly, colours respotted to the right spot (or the highest free one), free ball when you're snookered after a foul, *put him back in*, and a re-spotted black on a tie. 15, 10, 6 or 3 reds.
-- **8-ball pool:** on a 9-foot table with numbered solids (1–7), stripes (9–15) and the 8. Break from the kitchen, open table until the first legal pot, ball in hand anywhere after a foul, and the 8 last. Sink it early and you lose.
+- **8-ball pool:** on a 9-foot table with numbered solids (1–7), stripes (9–15) and the 8. Break from the kitchen, groups assigned by the first legal pot, including on the break, ball in hand anywhere after a foul, and the 8 last. Sink it early and you lose.
 - Single frames or best of 3, 5 or 7. **Singles (1 v 1) or doubles (2 v 2)** with real doubles rotation: A1, B1, A2, B2.
 
 **A computer that actually plays**
@@ -80,6 +80,12 @@ The physics models each ball's velocity and the velocity of its contact patch. W
 
 If the host reloads, the table reopens on the same code and friends can rejoin with the link they already have.
 
+## The club interface
+
+A rebuilt dark club interface pairs a live table preview with one place to choose your game, opponent, and difficulty. Pause or re-rack the preview, switch between snooker and 8-ball, and start a private table or an offline game. The room has a dedicated identity bar, scoreboard, controls dock, and a tabbed lobby for invites and house rules. Motion respects reduced-motion preferences.
+
+**8-ball house rule:** the first legal pot assigns solids or stripes, even on the break. That ownership stays fixed; later pots are counted against the assigned group. A scratched break leaves the table open.
+
 ## Controls
 
 | | Desktop | Phone |
@@ -99,7 +105,9 @@ git clone https://github.com/AtharvaLakhe/baize-club.git
 cd baize-club
 npm install
 npm run dev      # http://localhost:5173
-npm test         # physics and rules tests
+npm test         # physics, rules, AI, networking and preferences
+npx playwright install chromium # once, before browser tests
+npm run test:e2e # browser interaction and responsive regressions
 npm run build
 ```
 

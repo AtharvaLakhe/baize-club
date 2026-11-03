@@ -1,6 +1,7 @@
 // Per-browser preferences. Everything here is a convenience: the game works if storage is blocked.
 
-import { AVATARS } from './render/themes';
+import { AVATARS, CUE_SKINS } from './render/themes';
+import { isRecord, normalizeSettings } from './core/settings';
 import type { Profile } from './net/protocol';
 import { DEFAULT_SETTINGS, type MatchSettings } from './core/rules';
 
@@ -40,11 +41,21 @@ export function prefs(): Prefs {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const p = JSON.parse(raw) as Partial<Prefs>;
+      const parsed: unknown = JSON.parse(raw);
+      const p = isRecord(parsed) ? parsed : {};
+      const profile = isRecord(p.profile) ? p.profile : {};
       cache = {
-        ...d, ...p,
-        profile: { ...d.profile, ...p.profile },
-        lastSettings: { ...DEFAULT_SETTINGS, ...p.lastSettings, mutators: { ...DEFAULT_SETTINGS.mutators, ...p.lastSettings?.mutators } },
+        profile: {
+          name: typeof profile.name === 'string' ? profile.name.slice(0, 20) : d.profile.name,
+          avatar: typeof profile.avatar === 'string' && AVATARS.includes(profile.avatar) ? profile.avatar : d.profile.avatar,
+          cue: typeof profile.cue === 'string' && CUE_SKINS.some((c) => c.id === profile.cue) ? profile.cue : d.profile.cue,
+        },
+        sound: typeof p.sound === 'number' && Number.isFinite(p.sound) ? Math.max(0, Math.min(1, p.sound)) : d.sound,
+        ballLabels: typeof p.ballLabels === 'boolean' ? p.ballLabels : d.ballLabels,
+        leftHanded: typeof p.leftHanded === 'boolean' ? p.leftHanded : d.leftHanded,
+        seenHowTo: typeof p.seenHowTo === 'boolean' ? p.seenHowTo : d.seenHowTo,
+        lastBot: typeof p.lastBot === 'string' && ['easy', 'medium', 'hard'].includes(p.lastBot) ? p.lastBot : d.lastBot,
+        lastSettings: normalizeSettings(p.lastSettings),
       };
       return cache;
     }

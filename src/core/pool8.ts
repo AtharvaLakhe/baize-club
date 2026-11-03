@@ -156,6 +156,13 @@ export function resolvePool(prev: MatchState, record: ShotRecord, finalBalls: Ba
       f.scores[s] = g ? 7 - remaining(balls, g) : 0;
     }
   };
+  const assignGroups = () => {
+    if (ps.groups[shooter] || !objects.length || practice) return;
+    const g = groupOf(objects[0].n) as Group;
+    ps.groups[shooter] = g;
+    ps.groups[other] = g === 'solid' ? 'stripe' : 'solid';
+    summary.text = `${cap(g)}s for this player.`;
+  };
 
   if (foul) stats.fouls++;
 
@@ -168,9 +175,10 @@ export function resolvePool(prev: MatchState, record: ShotRecord, finalBalls: Ba
       pass('kitchen');
       summary.text = `${summary.text} Foul on the break: ${reasons.join(', ')}. Ball in hand behind the line.`.trim();
     } else if (objects.length > 0) {
+      assignGroups();
       f.currentBreak = objects.length;
       f.ballInHand = false;
-      summary.text = `${summary.text} ${objects.length} down on the break. Table is open.`.trim();
+      summary.text = `${summary.text} ${objects.length} down on the break. ${ps.groups[shooter] ? `You are ${ps.groups[shooter]}s.` : 'Table is open.'}`.trim();
     } else {
       pass(null);
       summary.text = summary.text || 'Nothing down on the break. Table is open.';
@@ -205,12 +213,7 @@ export function resolvePool(prev: MatchState, record: ShotRecord, finalBalls: Ba
     summary.text = `Foul: ${reasons.join(', ')}. Ball in hand.`;
   } else {
     // An open table is decided by the first ball legally potted.
-    if (!ps.groups[shooter] && objects.length > 0 && !practice) {
-      const g = groupOf(objects[0].n) as Group;
-      ps.groups[shooter] = g;
-      ps.groups[other] = g === 'solid' ? 'stripe' : 'solid';
-      summary.text = `${cap(g)}s for this player.`;
-    }
+    assignGroups();
     const mine = ps.groups[shooter];
     const scored = objects.filter((b) => !mine || groupOf(b.n) === mine).length;
     f.ballInHand = false;

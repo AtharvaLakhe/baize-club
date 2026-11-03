@@ -6,6 +6,7 @@ import { AVATARS } from '../render/themes';
 import { cuePicker } from './cuepreview';
 import { h } from './dom';
 import { icon } from './icons';
+import { mountDialog } from './dialog';
 
 export function switchRow(name: string, text: string, value: boolean, onChange: (v: boolean) => void, disabled = false): HTMLElement {
   const input = h('input', { type: 'checkbox', role: 'switch', checked: value, disabled, onchange: (e: Event) => onChange((e.target as HTMLInputElement).checked) });
@@ -16,12 +17,10 @@ export function switchRow(name: string, text: string, value: boolean, onChange: 
  * Open the profile card. With `requireName`, the card won't close until there is a name, and
  * `done` runs afterwards: used before opening or joining a table.
  */
-export function openProfile(opts: { requireName?: boolean; title?: string; done?: () => void; onChange?: () => void } = {}) {
+export function openProfile(opts: { requireName?: boolean; title?: string; done?: () => void; onChange?: () => void; onCancel?: () => void } = {}) {
   const p = prefs();
   const scrim = h('div.scrim', {});
-  const close = () => { scrim.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !opts.requireName) close(); };
-  document.addEventListener('keydown', onKey);
+  const cancel = () => { close(); opts.onCancel?.(); };
 
   const preview = h('div.avatar.lg', {}, p.profile.avatar);
   const name = h('input.input', { id: 'profile-name', maxlength: 20, value: p.profile.name, placeholder: 'What should friends call you?', autocomplete: 'nickname' }) as HTMLInputElement;
@@ -76,7 +75,7 @@ export function openProfile(opts: { requireName?: boolean; title?: string; done?
   scrim.append(h('form.card.panel', { role: 'dialog', 'aria-labelledby': 'profile-title', onsubmit: (e: Event) => { e.preventDefault(); save(); } },
     h('div.card-head', {},
       h('h2', { id: 'profile-title' }, opts.title ?? 'Your profile'),
-      opts.requireName ? null : h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: close }, icon('x')),
+      h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: cancel }, icon('x')),
     ),
     h('div.profile-top', {}, preview, h('label.field', { for: 'profile-name' }, h('span', {}, 'Name'), name)),
     err,
@@ -84,9 +83,8 @@ export function openProfile(opts: { requireName?: boolean; title?: string; done?
     body,
     h('button.btn.btn-gold.btn-lg.btn-block', { type: 'submit' }, opts.done ? 'Continue' : 'Save'),
   ));
-  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim && !opts.requireName) close(); });
-  document.body.append(scrim);
-  setTimeout(() => (p.profile.name ? null : name.focus()), 30);
+  const close = mountDialog(scrim, cancel);
+  return close;
 }
 
 /** The first time someone sits at a table, show them how to play. */
@@ -94,22 +92,20 @@ export function maybeShowHowTo(force = false) {
   if (!force && prefs().seenHowTo) return;
   savePrefs({ seenHowTo: true });
   const scrim = h('div.scrim', {});
-  const close = () => scrim.remove();
   scrim.append(h('div.card.panel', { role: 'dialog', 'aria-labelledby': 'howto-title' },
     h('div.card-head', {},
       h('h2', { id: 'howto-title' }, 'How to play'),
-      h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: close }, icon('x')),
+      h('button.icon-btn', { type: 'button', 'aria-label': 'Close', onclick: () => close() }, icon('x')),
     ),
     h('ol.steps', {},
       h('li', {}, h('span', {}, h('b', {}, 'Aim'), ' by pointing at the table. Use the ridged wheel (or the arrow keys) for tiny adjustments.')),
       h('li', {}, h('span', {}, h('b', {}, 'Pull back'), ' on the power bar, or click and drag back on the table, then let go to strike.')),
       h('li', {}, h('span', {}, h('b', {}, 'Spin'), ': tap the white ball to choose where the tip hits. Low for screw back, high for follow, sides for side.')),
-      h('li', {}, h('span', {}, h('b', {}, 'Ball in hand'), ': drag the cue ball anywhere inside the D before you shoot.')),
+      h('li', {}, h('span', {}, h('b', {}, 'Ball in hand'), ': drag the cue ball inside the D for snooker, behind the line for a pool break, or anywhere after a pool foul.')),
     ),
     h('p', {}, 'Snooker: pot a red, then any colour, and repeat. When the reds are gone, clear the colours in order from yellow to black.'),
-    h('p', {}, '8-ball: your first pot decides whether you are solids (1–7) or stripes (9–15). Clear your group, then sink the 8 to win. Sink it early and you lose.'),
-    h('button.btn.btn-gold.btn-lg.btn-block', { type: 'button', onclick: close }, 'Got it'),
+    h('p', {}, '8-ball: your first legal pot, including on the break, assigns solids (1–7) or stripes (9–15). Your group stays yours. Clear it, then sink the 8 to win. Sink it early and you lose.'),
+    h('button.btn.btn-gold.btn-lg.btn-block', { type: 'button', onclick: () => close() }, 'Got it'),
   ));
-  scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim) close(); });
-  document.body.append(scrim);
+  const close = mountDialog(scrim, () => close());
 }

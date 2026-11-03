@@ -39,27 +39,45 @@ export interface OnlineHost {
 }
 
 /** Register the room code with the broker and accept friends as they arrive. */
-export function hostOnline(code: string, onLink: (l: Link) => void): Promise<OnlineHost> {
+export function hostOnline(code: string, onLink: (l: Link) => void, timeoutMs = 15000, signal?: AbortSignal): Promise<OnlineHost> {
   return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
     const peer = new Peer(PEER_PREFIX + code, { debug: 0 });
     let opened = false;
+    let settled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      finish();
+      peer.destroy();
+      reject(error);
+    };
+    const abort = () => fail(new DOMException('Connection cancelled', 'AbortError'));
+    const timer = setTimeout(() => fail(new Error('timeout')), timeoutMs);
+    signal?.addEventListener('abort', abort, { once: true });
     peer.on('open', () => {
+      if (settled) return;
+      settled = true;
       opened = true;
-      resolve({ peer, close: () => peer.destroy() });
+      finish();
+      resolve({ peer, close: () => { clearTimeout(reconnectTimer); peer.destroy(); } });
     });
     peer.on('connection', (conn) => {
       conn.on('open', () => onLink(wrap(conn)));
     });
     peer.on('disconnected', () => {
       // Lost the broker; existing games keep going, but new friends can't join until we reconnect.
-      if (!peer.destroyed) setTimeout(() => !peer.destroyed && peer.reconnect(), 1500);
-    });
-    peer.on('error', (err: Error & { type?: string }) => {
-      if (!opened) {
-        peer.destroy();
-        reject(err);
+      if (!peer.destroyed && opened) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => !peer.destroyed && peer.reconnect(), 1500);
       }
     });
+    peer.on('error', (err: Error & { type?: string }) => {
+      if (!opened) fail(err);
+    });
+    peer.on('close', () => { if (!opened) fail(new Error('closed')); });
   });
 }
 
@@ -68,32 +86,39 @@ export interface OnlineClient {
   close(): void;
 }
 
-export function joinOnline(code: string, timeoutMs = 15000): Promise<OnlineClient> {
+export function joinOnline(code: string, timeoutMs = 15000, signal?: AbortSignal): Promise<OnlineClient> {
   return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
     const peer = new Peer({ debug: 0 });
     let done = false;
+    const finish = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); };
     const fail = (e: Error) => {
       if (done) return;
       done = true;
+      finish();
       peer.destroy();
       reject(e);
     };
+    const abort = () => fail(new DOMException('Connection cancelled', 'AbortError'));
     const timer = setTimeout(() => fail(new Error('timeout')), timeoutMs);
+    signal?.addEventListener('abort', abort, { once: true });
     peer.on('open', () => {
       const conn = peer.connect(PEER_PREFIX + code, { reliable: true });
       conn.on('open', () => {
         if (done) return;
         done = true;
-        clearTimeout(timer);
+        finish();
         const link = wrap(conn);
         const origClose = link.close;
-        link.close = () => { origClose(); peer.destroy(); };
+        link.close = () => { origClose(); if (!peer.destroyed) peer.destroy(); };
         resolve({ link, close: () => link.close() });
       });
+      conn.on('close', () => fail(new Error('closed')));
+      conn.on('error', (err: Error) => fail(err));
     });
     peer.on('error', (err: Error & { type?: string }) => {
-      clearTimeout(timer);
       fail(err.type === 'peer-unavailable' ? new Error('not-found') : err);
     });
+    peer.on('close', () => fail(new Error('closed')));
   });
 }

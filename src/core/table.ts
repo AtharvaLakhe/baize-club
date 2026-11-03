@@ -183,6 +183,7 @@ export function clampToD(t: TableGeometry, x: number, y: number): { x: number; y
 
 /** True if the cue ball may be placed at (x, y) when in hand in `zone` (other balls aside). */
 export function inZone(t: TableGeometry, zone: HandZone, x: number, y: number): boolean {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   if (zone === 'D') return inD(t, x, y);
   if (y < t.R || y > t.W - t.R || x < t.R || x > t.L - t.R) return false;
   return zone === 'table' || x <= t.baulkX;

@@ -21,7 +21,7 @@ export class Session {
     link.onMessage = (raw) => {
       const msg = raw as HostMsg;
       if (msg.t === 'welcome') { this.you = msg.you; this.room = msg.room; this.match = msg.match; }
-      if (msg.t === 'room') this.room = msg.room;
+      if (msg.t === 'room') { this.room = msg.room; if (msg.room.status === 'lobby') this.match = null; }
       if (msg.t === 'match') this.match = msg.match;
       if (msg.t === 'shot') this.match = msg.result;
       for (const h of this.handlers) h(msg);
@@ -43,7 +43,7 @@ export class Session {
     const r = this.room;
     if (!r) return [];
     const n = chairCount(r.settings);
-    if (r.kind === 'local') return r.seats.slice(0, n).flatMap((s, i) => (s === BOT_ID ? [] : [i]));
+    if (r.kind === 'local') return r.seats.slice(0, n).flatMap((s, i) => (!s || s === BOT_ID ? [] : [i]));
     return r.seats.slice(0, n).flatMap((s, i) => (s === this.you ? [i] : []));
   }
 
@@ -53,10 +53,13 @@ export class Session {
   }
 
   leave() {
+    if (this.closedByUs) return;
     this.closedByUs = true;
     this.link.close();
     this.host?.destroy();
     this.cleanup();
+    this.handlers.clear();
+    this.closeHandlers.clear();
   }
 }
 
@@ -73,7 +76,7 @@ export function clientId(): string {
 
 function attachLocal(host: HostRoom, profile: Profile, cleanup: () => void): Session {
   const [hostEnd, clientEnd] = loopbackPair();
-  host.addLink(hostEnd);
+  host.addLink(hostEnd, true);
   const s = new Session(clientEnd, host, cleanup);
   s.send({ t: 'hello', clientId: host.room.hostId, profile });
   return s;
@@ -99,30 +102,35 @@ export interface SavedTable { code: string; room: RoomState; match: MatchState |
  * Open a private online table. Retries with a fresh code if one is taken. With `saved`, reopens
  * the same code (after a reload) so friends can reconnect with the link they already have.
  */
-export async function createOnline(profile: Profile, settings: MatchSettings, saved?: SavedTable): Promise<Session> {
+export async function createOnline(profile: Profile, settings: MatchSettings, saved?: SavedTable, signal?: AbortSignal): Promise<Session> {
   const id = clientId();
   let lastErr: unknown;
   for (let attempt = 0; attempt < (saved ? 6 : 4); attempt++) {
+    signal?.throwIfAborted();
     const code = saved ? saved.code : makeCode();
     const host = new HostRoom(code, id, 'online', settings);
     if (saved) host.restore(saved.room, saved.match);
     let online: OnlineHost;
     try {
-      online = await hostOnline(code, (l) => host.addLink(l));
+      online = await hostOnline(code, (l) => host.addLink(l), 15000, signal);
     } catch (e) {
+      host.destroy();
+      if (signal?.aborted || (e as { type?: string }).type !== 'unavailable-id') throw e;
       lastErr = e;
       // The broker can hold a reloaded host's old id for a few seconds.
       if (saved) await new Promise((r) => setTimeout(r, 2500));
       continue;
     }
+    if (signal?.aborted) { host.destroy(); online.close(); signal.throwIfAborted(); }
     return attachLocal(host, profile, () => online.close());
   }
   throw lastErr ?? new Error('Could not open a table');
 }
 
-export async function joinRoom(code: string, profile: Profile): Promise<Session> {
-  const c = await joinOnline(code);
-  const s = new Session(c.link, null, () => {});
+export async function joinRoom(code: string, profile: Profile, signal?: AbortSignal): Promise<Session> {
+  const c = await joinOnline(code, 15000, signal);
+  if (signal?.aborted) { c.close(); signal.throwIfAborted(); }
+  const s = new Session(c.link, null, () => c.close());
   s.send({ t: 'hello', clientId: clientId(), profile });
   return s;
 }

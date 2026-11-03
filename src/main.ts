@@ -1,16 +1,21 @@
 import './styles.css';
+import './club.css';
 import { normalizeCode } from './net/protocol';
 import { createLocal, createOnline, joinRoom, type SavedTable, type Session } from './net/session';
 import { prefs, profileForWire } from './prefs';
 import { GameView } from './ui/game';
-import { renderHome } from './ui/home';
+import { renderHome } from './ui/club';
 import { h } from './ui/dom';
 import { openProfile } from './ui/profile';
+import { closeDialogs } from './ui/dialog';
 
 const app = document.getElementById('app')!;
 let teardown: (() => void) | null = null;
+let navigation = 0;
 
 function clear() {
+  navigation++;
+  closeDialogs();
   teardown?.();
   teardown = null;
   app.innerHTML = '';
@@ -35,45 +40,62 @@ function home(notice?: string) {
 
 function play(session: Session, code?: string) {
   clear();
-  const view = new GameView(session, {
+  let view: GameView;
+  try { view = new GameView(session, {
     leave: () => {
       if (session.isHost) {
         try { sessionStorage.removeItem('baize.hosting'); } catch { /* storage blocked */ }
       }
-      session.leave();
       go('/');
     },
     reconnect: code ? () => { session.leave(); void joinTable(code); } : undefined,
-  });
+  }); } catch {
+    session.leave();
+    home('The 3D table could not start. Enable hardware acceleration or try a browser with WebGL support.');
+    return;
+  }
   view.mount(app);
-  teardown = () => view.destroy();
+  teardown = () => {
+    view.destroy();
+    session.leave();
+    if (session.isHost && session.room?.kind === 'online') {
+      try { sessionStorage.removeItem('baize.hosting'); } catch { /* storage blocked */ }
+    }
+  };
 }
 
 function connecting(text: string) {
   clear();
-  const el = h('div.connect', {}, h('div.card.panel', { role: 'status', style: 'justify-items:center;text-align:center' }, h('div.spinner'), h('h2', {}, text), h('p', {}, 'This usually takes a second or two.')));
+  const controller = new AbortController();
+  teardown = () => controller.abort();
+  const el = h('div.connect', {}, h('div.card.panel', { role: 'status', style: 'justify-items:center;text-align:center' }, h('div.spinner'), h('h2', {}, text), h('p', {}, 'Connecting to your private table.'), h('button.btn.btn-ghost', { type: 'button', onclick: () => go('/') }, 'Back to the club')));
   app.append(el);
+  return { id: navigation, signal: controller.signal };
 }
 
 async function hostTable(saved?: SavedTable) {
-  connecting(saved ? 'Reopening your table…' : 'Opening your table…');
+  const attempt = connecting(saved ? 'Reopening your table…' : 'Opening your table…');
   try {
     const settings = { ...(saved?.room.settings ?? prefs().lastSettings), mode: 'match' as const };
-    const s = await createOnline(profileForWire(), settings, saved);
+    const s = await createOnline(profileForWire(), settings, saved, attempt.signal);
+    if (attempt.id !== navigation) { s.leave(); return; }
     history.replaceState(null, '', `/t/${s.host!.room.code}`);
     play(s);
   } catch {
+    if (attempt.id !== navigation) return;
     try { sessionStorage.removeItem('baize.hosting'); } catch { /* storage blocked */ }
     home('Could not open a table. Check your connection and try again.');
   }
 }
 
 async function joinTable(code: string) {
-  connecting(`Finding table ${code}…`);
+  const attempt = connecting(`Finding table ${code}…`);
   try {
-    const s = await joinRoom(code, profileForWire());
+    const s = await joinRoom(code, profileForWire(), attempt.signal);
+    if (attempt.id !== navigation) { s.leave(); return; }
     play(s, code);
   } catch (e) {
+    if (attempt.id !== navigation) return;
     const msg = (e as Error).message === 'not-found'
       ? `No table with the code ${code} is open. Check the code, or ask your friend to send the link again.`
       : `Could not reach table ${code}. Check your connection and try again.`;
@@ -82,12 +104,14 @@ async function joinTable(code: string) {
 }
 
 function askName(then: () => void) {
-  clear();
-  openProfile({ requireName: true, title: 'Pull up a chair', done: then });
+  const path = location.pathname;
+  home();
+  history.replaceState(null, '', path);
+  openProfile({ requireName: true, title: 'Pull up a chair', done: then, onCancel: () => go('/') });
 }
 
 function route() {
-  const m = location.pathname.match(/^\/t\/([A-Za-z0-9]{4,8})\/?$/);
+  const m = location.pathname.match(/^\/t\/([A-Za-z0-9]{6})\/?$/);
   if (!m) return home();
   const code = normalizeCode(m[1]);
   let saved: SavedTable | null = null;

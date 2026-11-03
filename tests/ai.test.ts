@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as physics from '../src/core/physics';
 import { planShot, potLines } from '../src/core/ai';
 import { makeWorld, simulate } from '../src/core/physics';
 import { canPlaceCue, DEFAULT_SETTINGS, newMatch, tableFor, type MatchState } from '../src/core/rules';
@@ -48,4 +49,22 @@ describe('computer opponent', () => {
     expect(canPlaceCue(table, m.frame.balls, shot.cueX!, shot.cueY!)).toBe(true);
     expect(Number.isFinite(shot.params.dx) && Number.isFinite(shot.params.power)).toBe(true);
   });
+
+  it('uses a bounded opening search and makes legal red contact', async () => {
+    const simulations = vi.spyOn(physics, 'simulate');
+    // Difficulty adds intentional human error after planning. Isolate candidate geometry:
+    // a quarter turn makes the Gaussian aim/power noise zero.
+    const randomness = vi.spyOn(Math, 'random').mockReturnValue(.25);
+    try {
+      const m = newMatch(settings, 0);
+      const shot = await planShot(m, 'medium');
+      expect(simulations.mock.calls.length).toBeLessThanOrEqual(8);
+      const balls = m.frame.balls.map((b) => ({ ...b }));
+      balls[0].x = shot.cueX!; balls[0].y = shot.cueY!;
+      const world = makeWorld(table, balls);
+      const result = simulate(world, shot.params);
+      expect(result.firstHit).not.toBeNull();
+      expect(m.frame.balls[result.firstHit!].kind).toBe('red');
+    } finally { simulations.mockRestore(); randomness.mockRestore(); }
+  }, 20000);
 });

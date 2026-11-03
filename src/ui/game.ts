@@ -21,11 +21,12 @@ import { h, toast } from './dom';
 import { icon, type IconName } from './icons';
 import { buildLobby } from './lobby';
 import { maybeShowHowTo, openProfile } from './profile';
+import { mountDialog } from './dialog';
 import { REPO_URL, shareResult } from './sharecard';
 
 const REACTIONS = ['👏', '🔥', '😮', '😂', '😬', '🫡'];
 
-interface PendingResult { match: MatchState; clockMs: number | null }
+interface PendingResult { match: MatchState; clockDeadline: number | null }
 
 export interface GameHooks {
   leave(): void;
@@ -40,7 +41,7 @@ export class GameView {
   private tableKey = '';
   match: MatchState | null = null;
 
-  private queue: HostMsg[] = [];
+  private queue: Array<{ msg: Extract<HostMsg, { t: 'match' | 'shot' }>; receivedAt: number }> = [];
   private anim: ShotAnimator | null = null;
   private animDelayUntil = 0;
   private pending: PendingResult | null = null;
@@ -89,6 +90,7 @@ export class GameView {
   private spinEl!: HTMLElement;
   private scrimEl!: HTMLElement;
   private lobbyEl: HTMLElement | null = null;
+  private lobbyTab: 'players' | 'rules' = 'players';
   private chatEl!: HTMLElement;
   private chatLog!: HTMLElement;
   private chatBtn!: HTMLButtonElement;
@@ -98,6 +100,7 @@ export class GameView {
   private inLobby = false;
   private commentaryTimer: ReturnType<typeof setTimeout> | null = null;
   private overlayKind = '';
+  private overlayCleanup: (() => void) | null = null;
   private wheelOffset = 0;
 
   constructor(private session: Session, private hooks: GameHooks) {
@@ -127,10 +130,12 @@ export class GameView {
   }
 
   destroy() {
+    this.closeOverlay();
     cancelAnimationFrame(this.raf);
     this.unsub.forEach((u) => u());
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKey);
+    if (this.commentaryTimer) clearTimeout(this.commentaryTimer);
     this.renderer.dispose();
     this.root.remove();
   }
@@ -143,11 +148,11 @@ export class GameView {
       case 'welcome':
       case 'room':
         this.onRoom();
-        if (m.t === 'welcome' && m.match) this.queue.push({ t: 'match', match: m.match, clockMs: null });
+        if (m.t === 'welcome' && m.match) this.queue.push({ msg: { t: 'match', match: m.match, clockMs: null }, receivedAt: performance.now() });
         break;
       case 'match':
       case 'shot':
-        this.queue.push(m);
+        this.queue.push({ msg: m, receivedAt: performance.now() });
         break;
       case 'aim': {
         if (this.myChairs().includes(m.seat)) break;
@@ -184,9 +189,22 @@ export class GameView {
 
   private onRoom() {
     const room = this.session.room!;
-    const key = JSON.stringify([room.settings.tableTheme, room.settings.mutators]);
+    this.topbar.querySelector('.room-kind')!.textContent = `${room.settings.game === 'pool8' ? '8-ball pool' : 'Snooker'} / ${room.kind === 'online' ? `Table ${room.code}` : room.settings.mode === 'practice' ? 'Solo practice' : room.members.some((m) => m.id === BOT_ID) ? 'The computer' : 'Pass-and-play'}`;
+    const key = JSON.stringify([room.settings.game, room.settings.tableTheme, room.settings.mutators]);
     if (room.status === 'lobby') {
       this.match = null;
+      this.queue = [];
+      this.anim = this.replay = null;
+      this.pending = null;
+      this.lastShot = null;
+      this.pots = [];
+      this.strike = null;
+      this.remote = null;
+      this.place = null;
+      this.drag = null;
+      this.pull = this.spinX = this.spinY = 0;
+      this.awaitingEcho = 0;
+      this.clockDeadline = null;
       this.closeOverlay();
       if (key !== this.tableKey) this.setTable(tableFor(room.settings), room.settings.tableTheme, key);
       this.showLobby();
@@ -212,15 +230,17 @@ export class GameView {
   private showLobby() {
     const fresh = buildLobby(this.session, {
       leave: () => this.hooks.leave(),
+      tab: this.lobbyTab,
+      selectTab: (tab) => { this.lobbyTab = tab; this.showLobby(); this.lobbyEl?.querySelector<HTMLElement>(`#lobby-${tab}-tab`)?.focus(); },
       preview: (s) => {
-        const key = JSON.stringify([s.tableTheme, s.mutators]);
+        const key = JSON.stringify([s.game, s.tableTheme, s.mutators]);
         if (key !== this.tableKey) this.setTable(tableFor(s), s.tableTheme, key);
       },
     });
     if (this.lobbyEl) this.lobbyEl.replaceWith(fresh);
     else this.root.append(fresh);
     // Keep the scroll position when the lobby re-renders.
-    if (this.lobbyEl) fresh.scrollTop = this.lobbyEl.scrollTop;
+    if (this.lobbyEl) fresh.querySelector('.lobby-content')!.scrollTop = this.lobbyEl.querySelector('.lobby-content')!.scrollTop;
     this.lobbyEl = fresh;
   }
 
@@ -232,9 +252,10 @@ export class GameView {
 
   private processQueue(now: number) {
     while (!this.anim && !this.replay && this.queue.length) {
-      const m = this.queue.shift()!;
-      if (m.t === 'match') this.applyMatch(m.match, m.clockMs);
-      else if (m.t === 'shot') this.startShot(m, now);
+      const { msg: m, receivedAt } = this.queue.shift()!;
+      const clockMs = m.clockMs === null ? null : Math.max(0, m.clockMs - (now - receivedAt));
+      if (m.t === 'match') this.applyMatch(m.match, clockMs);
+      else this.startShot({ ...m, clockMs }, now);
     }
   }
 
@@ -256,7 +277,7 @@ export class GameView {
       onImpact: (i) => this.renderer.impact(i.kind, i.x, i.y, i.speed),
     });
     this.pots = this.anim.pots;
-    this.pending = { match: m.result, clockMs: m.clockMs };
+    this.pending = { match: m.result, clockDeadline: m.clockMs === null ? null : now + m.clockMs };
     this.lastShot = { start: m.start, params: m.params };
     this.remote = null;
     this.place = null;
@@ -266,7 +287,8 @@ export class GameView {
   private applyMatch(m: MatchState, clockMs: number | null) {
     const prev = this.match;
     this.match = m;
-    const key = JSON.stringify([m.settings.tableTheme, m.settings.mutators]);
+    const key = JSON.stringify([m.settings.game, m.settings.tableTheme, m.settings.mutators]);
+    this.canvas.setAttribute('aria-label', m.settings.game === 'pool8' ? '8-ball pool table' : 'Snooker table');
     if (key !== this.tableKey) this.setTable(tableFor(m.settings), m.settings.tableTheme, key);
     this.clockDeadline = clockMs !== null ? performance.now() + clockMs : null;
 
@@ -276,7 +298,9 @@ export class GameView {
       if (ls.text) this.say(ls.text, !!ls.foul);
       if (ls.foul) sfx.foul();
     }
-    if (prev && prev.frameNo !== m.frameNo) {
+    if (prev && (prev.frameNo !== m.frameNo || (prev.over && !m.over))) {
+      this.lastShot = null;
+      this.pots = [];
       this.closeOverlay();
       this.orients = new Orientations();
       this.say(`Frame ${m.frameNo}. ${this.nameOf(m.frame.turn)} to break.`, false);
@@ -441,7 +465,7 @@ export class GameView {
         this.anim = null;
         const p = this.pending;
         this.pending = null;
-        if (p) this.applyMatch(p.match, p.clockMs);
+        if (p) this.applyMatch(p.match, p.clockDeadline === null ? null : Math.max(0, p.clockDeadline - now));
       }
       balls = this.anim ? this.anim.world.balls : this.match?.frame.balls ?? [];
     } else if (this.match) {
@@ -488,7 +512,7 @@ export class GameView {
 
     const placing = this.place && this.canShoot() ? { valid: canPlaceCue(this.table, this.match!.frame.balls, this.place.x, this.place.y, this.zone()), zone: this.zone() } : null;
     const orients = this.replay ? this.replayOrients : this.orients;
-    this.renderer.setMode(this.inLobby ? 'orbit' : 'overview');
+    this.renderer.setMode('overview');
     this.renderer.draw({ balls, pots, now, cue, guide, placing, labels: prefs().ballLabels, orient: (id) => orients.get(id), moving: (!!this.anim && now > this.animDelayUntil + 280) || !!this.replay });
     this.updateClock(now);
     const can = this.canShoot();
@@ -604,7 +628,8 @@ export class GameView {
 
   private onKey = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (t?.closest('input, textarea, select, button, a, [contenteditable="true"], [role="dialog"], [role="alertdialog"]')) return;
+    if (this.overlayKind || document.querySelector('[aria-modal="true"]')) return;
     if (e.key === 'Escape') { this.closeMenus(); if (this.drag) { this.drag = null; this.pull = 0; this.renderPower(); } return; }
     if (!this.canShoot()) return;
     const big = e.shiftKey ? 6 : 1;
@@ -625,10 +650,10 @@ export class GameView {
     const portrait = hgt > w * 1.05;
     const short = hgt < 520;
     let pad = portrait
-      ? { top: 160, right: 66, bottom: 64, left: 66 }
-      : { top: short ? 72 : 104, right: 96, bottom: 56, left: 96 };
+      ? { top: 222, right: 66, bottom: 86, left: 66 }
+      : { top: short ? 138 : 184, right: 96, bottom: 80, left: 96 };
     // In the lobby, slide the table out from under the panel when there is room.
-    if (this.inLobby) pad = w > 900 ? { top: 40, right: 32, bottom: 40, left: Math.min(520, w * 0.4) } : { top: 16, right: 8, bottom: 16, left: 8 };
+    if (this.inLobby) pad = w > 900 ? { top: 100, right: 32, bottom: 40, left: Math.min(560, w * 0.42) } : { top: 80, right: 8, bottom: 16, left: 8 };
     this.renderer.setPadding(pad);
     this.placeRails();
   };
@@ -644,7 +669,7 @@ export class GameView {
     this.commentaryEl = h('div.commentary', { role: 'status' });
 
     this.menuEl = h('div.menu.panel', { hidden: true, role: 'menu' });
-    const menuBtn = h('button.icon-btn', { type: 'button', 'aria-label': 'Menu', onclick: () => this.toggleMenu() }, icon('menu'));
+    const menuBtn = h('button.icon-btn', { type: 'button', 'aria-label': 'Menu', title: 'Table menu', onclick: () => this.toggleMenu() }, icon('sliders'));
     this.chatBtn = h('button.icon-btn', { type: 'button', 'aria-label': 'Chat', onclick: () => this.toggleChat() }, icon('chat')) as HTMLButtonElement;
     const reactBtn = h('button.icon-btn', { type: 'button', 'aria-label': 'Send a reaction', onclick: () => { this.reactEl.hidden = !this.reactEl.hidden; this.menuEl.hidden = true; } }, icon('smile'));
 
@@ -669,14 +694,15 @@ export class GameView {
     }
 
     this.scrimEl = h('div.scrim', { hidden: true });
-    this.topbar = h('div.topbar', {},
-      h('div.group.menu-group', {}, menuBtn),
-      h('div.board-slot', {}, this.boardEl),
-      h('div.group', {}, reactBtn, this.chatBtn),
+    this.topbar = h('header.room-header', {},
+      h('div.room-identity', {}, h('span.club-mark', { 'aria-hidden': 'true' }, h('span', {}, '8')),
+        h('div', {}, h('span.room-brand', {}, 'Obsidian'), h('span.room-kind', {}, 'Your private table'))),
+      h('div.room-actions', {}, h('span.room-message', {}, 'Make yourself at home.'), menuBtn, reactBtn, this.chatBtn),
     );
     this.buildRails();
-    this.root.append(this.topbar, this.statusEl, this.commentaryEl, this.powerRail, this.aimRail, this.menuEl, this.chatEl, this.reactEl, this.scrimEl);
-    this.hudEls = [this.boardEl, this.statusEl, this.commentaryEl, this.powerRail, this.aimRail, this.topbar.querySelector('.menu-group') as HTMLElement];
+    const help = h('div.table-help', {}, h('span', {}, 'Aim'), h('span', { 'aria-hidden': 'true' }, '·'), h('span', {}, 'Pull back'), h('span', { 'aria-hidden': 'true' }, '·'), h('span', {}, 'Release to shoot'), h('button', { type: 'button', onclick: () => maybeShowHowTo(true) }, icon('help', 15), 'Controls'));
+    this.root.append(this.topbar, h('div.scoreboard-wrap', {}, this.boardEl), this.statusEl, this.commentaryEl, this.powerRail, this.aimRail, this.menuEl, this.chatEl, this.reactEl, this.scrimEl, help);
+    this.hudEls = [this.boardEl, this.statusEl, this.commentaryEl, this.powerRail, this.aimRail, help];
   }
 
   /** Power bar on one edge; spin and the fine-aim wheel on the other. */
@@ -724,16 +750,19 @@ export class GameView {
       this.aimDirty = true;
       this.renderSpin();
     };
-    this.spinEl.addEventListener('pointerdown', (e) => { this.spinEl.setPointerCapture(e.pointerId); setSpin(e); });
-    this.spinEl.addEventListener('pointermove', (e) => { if (this.spinEl.hasPointerCapture(e.pointerId)) setSpin(e); });
-    this.spinEl.addEventListener('dblclick', () => { this.spinX = 0; this.spinY = 0; this.renderSpin(); });
+    this.spinEl.addEventListener('pointerdown', (e) => { if (!this.canShoot()) return; this.spinEl.setPointerCapture(e.pointerId); setSpin(e); });
+    this.spinEl.addEventListener('pointermove', (e) => { if (this.canShoot() && this.spinEl.hasPointerCapture(e.pointerId)) setSpin(e); });
+    this.spinEl.addEventListener('dblclick', () => { if (!this.canShoot()) return; this.spinX = 0; this.spinY = 0; this.aimDirty = true; this.renderSpin(); });
     this.spinEl.addEventListener('keydown', (e) => {
+      if (!this.canShoot()) return;
       const step = 0.1;
       if (e.key === 'w') this.spinY = Math.min(1, this.spinY + step);
       else if (e.key === 's') this.spinY = Math.max(-1, this.spinY - step);
       else if (e.key === 'a') this.spinX = Math.max(-1, this.spinX - step);
       else if (e.key === 'd') this.spinX = Math.min(1, this.spinX + step);
       else return;
+      e.preventDefault();
+      this.aimDirty = true;
       this.renderSpin();
     });
 
@@ -770,6 +799,8 @@ export class GameView {
   }
 
   private renderSpin() {
+    const length = Math.hypot(this.spinX, this.spinY);
+    if (length > 1) { this.spinX /= length; this.spinY /= length; }
     const tip = this.spinEl?.querySelector('.tip') as HTMLElement | null;
     if (!tip) return;
     tip.style.left = `${50 + this.spinX * 38}%`;
@@ -833,8 +864,8 @@ export class GameView {
         ...m.frame.balls.filter((b) => b.on && groupOf(b.n) === group).map((b) => miniBall(b.n!))) : null;
       card.append(
         faces,
-        h('div.who', {}, h('div.name', {}, this.nameOf(seat)), groupRack ?? h('div.sub', {}, sub)),
-        h('span.score', {}, String(m?.frame.scores[seat] ?? 0)),
+        h('div.who', {}, h('div.name', {}, this.nameOf(seat)), h('div.sub', {}, sub), groupRack),
+        h('span.score', { 'aria-label': `${this.nameOf(seat)}: ${m?.frame.scores[seat] ?? 0}${pool ? ' balls cleared' : ' points'}` }, String(m?.frame.scores[seat] ?? 0)),
       );
     }
     this.midEl.innerHTML = '';
@@ -878,16 +909,14 @@ export class GameView {
     this.renderPower();
   }
 
-  private lastClockText = '';
   private updateClock(now: number) {
     const el = this.statusEl.querySelector('[data-clock]') as HTMLElement | null;
     if (!el) return;
     if (this.clockDeadline === null || this.anim || this.match?.frame.over) { el.hidden = true; return; }
     const left = Math.max(0, Math.ceil((this.clockDeadline - now) / 1000));
-    const text = `${left}s`;
-    if (text !== this.lastClockText) {
-      this.lastClockText = text;
-      el.textContent = `Shot clock ${text}`;
+    const text = `Shot clock ${left}s`;
+    if (el.textContent !== text) {
+      el.textContent = text;
       el.className = left <= 5 ? 'tag hot' : 'tag';
     }
     el.hidden = false;
@@ -904,13 +933,17 @@ export class GameView {
   // Overlays
 
   private openOverlay(kind: string, card: HTMLElement) {
+    this.overlayCleanup?.();
     this.overlayKind = kind;
     this.scrimEl.innerHTML = '';
     this.scrimEl.append(card);
     this.scrimEl.hidden = false;
+    this.overlayCleanup = mountDialog(this.scrimEl, () => { if (this.overlayKind === 'confirm') this.closeOverlay(); });
   }
 
   private closeOverlay() {
+    this.overlayCleanup?.();
+    this.overlayCleanup = null;
     this.overlayKind = '';
     this.scrimEl.hidden = true;
     this.scrimEl.innerHTML = '';

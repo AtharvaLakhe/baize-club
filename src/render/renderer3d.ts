@@ -58,6 +58,7 @@ interface Pose { pos: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3 }
 export class Renderer3D {
   readonly gl: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
+  private environment: THREE.WebGLRenderTarget;
   private camera = new THREE.PerspectiveCamera(32, 1, 0.05, 50);
   private tableGroup = new THREE.Group();
   private ballGroup = new THREE.Group();
@@ -106,7 +107,10 @@ export class Renderer3D {
     this.gl.shadowMap.type = THREE.PCFShadowMap;
 
     const pmrem = new THREE.PMREMGenerator(this.gl);
-    this.scene.environment = pmrem.fromScene(hallEnvironment(), 0.015).texture;
+    const hall = hallEnvironment();
+    this.environment = pmrem.fromScene(hall, 0.015);
+    this.scene.environment = this.environment.texture;
+    disposeTree(hall);
     this.scene.environmentIntensity = 1;
     pmrem.dispose();
 
@@ -120,6 +124,20 @@ export class Renderer3D {
   get rotated() { return this.portrait; }
 
   dispose() {
+    disposeTree(this.scene);
+    for (const mat of this.materials.values()) { mat.map?.dispose(); mat.dispose(); }
+    for (const mat of this.trailMats.values()) mat.dispose();
+    this.scene.traverse((object) => { if (object instanceof THREE.Light && 'shadow' in object) (object as THREE.DirectionalLight).shadow?.dispose(); });
+    this.environment.dispose();
+    this.shadowTex.dispose();
+    this.glowTex.dispose();
+    this.scene.clear();
+    this.materials.clear();
+    this.trailMats.clear();
+    this.ballMeshes.clear();
+    this.shadowMeshes.clear();
+    this.trails.clear();
+    this.cueMeshes.clear();
     this.gl.dispose();
     this.gl.forceContextLoss();
   }
@@ -390,7 +408,13 @@ export class Renderer3D {
     for (const o of [...this.tableGroup.children]) disposeTree(o);
     this.tableGroup.clear();
     for (const m of this.ballMeshes.values()) this.ballGroup.remove(m);
-    for (const m of this.shadowMeshes.values()) this.ballGroup.remove(m);
+    for (const m of this.shadowMeshes.values()) {
+      this.ballGroup.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
+    for (const ghosts of this.trails.values()) for (const mesh of ghosts) this.ballGroup.remove(mesh);
+    this.trails.clear();
     this.ballMeshes.clear();
     this.shadowMeshes.clear();
     this.ballGeo?.dispose();
@@ -562,8 +586,8 @@ export class Renderer3D {
   }
 
   private buildDAndRing() {
-    if (this.dMesh) { this.guideGroup.remove(this.dMesh); this.dMesh.geometry.dispose(); }
-    if (this.placeRing) { this.guideGroup.remove(this.placeRing); this.placeRing.geometry.dispose(); }
+    if (this.dMesh) { this.guideGroup.remove(this.dMesh); disposeTree(this.dMesh); }
+    if (this.placeRing) { this.guideGroup.remove(this.placeRing); disposeTree(this.placeRing); }
     const t = this.table;
     const shape = new THREE.Shape();
     if (t.game === 'pool8') {
