@@ -1,8 +1,8 @@
-# Match-board design and reliability verification — 2026-11-03
+# Interactive-eight design and reliability verification — 2026-11-03
 
 ## Changes covered
 
-- Reworked the entrance as a table-and-score-sheet board, with a stable live preview, direct mode/game selection, and matching lobby, scoreboard, dialogs, and responsive styling. References and decisions are recorded in design-system/obsidian/REFERENCES.md.
+- Replaced the paper match board with a dark interactive playroom. The eight-ball follows horizontal dragging and rolls away on release, click, tap, Enter, or Space; reset brings it back. Cancelled gestures restore the pose. Mode/game controls remain direct, and the live table pauses while covered. Reduced motion skips the rolling and pointer tilt. The lobby, scoreboard, dialogs, fonts, favicon, PWA colors, and screenshots share the new identity.
 - Pool: the first legal pot assigns groups, including a legal break pot. Later solids stay with the player assigned solids; a scratched break does not assign groups. Regressions cover either breaker. Group names remain visible beside remaining-ball indicators.
 - Pass-and-play rematches, duplicate start protection, stale computer-turn cleanup, session teardown, cancelled connections, broker timeout, premature channel close, and reserved host identity protection.
 - Corrupt saved preferences/settings, non-finite cue placement, and invalid spin input.
@@ -11,7 +11,7 @@
 
 ## Automated checks
 
-`npm test`: 61 tests across nine files. `npm run build`: TypeScript and production Vite build. `npm run test:e2e`: 14 Chromium browser tests. Browser functional tests use reduced motion to make control assertions stable; normal preview animation was also exercised through the Playwright plugin.
+`npm test`: 61 tests across nine files. `npm run build`: TypeScript and production Vite build. `npm run test:e2e`: 17 Chromium browser cases, including three new cases for the eight-ball reveal/reset, drag, and pointer cancellation. The drag case explicitly enables normal motion and checks actual displacement; other functional tests generally use reduced motion for stable control assertions. Normal pointer motion and rolling were also exercised through the Playwright plugin and captured on video.
 
 Browser coverage includes selection/focus retention, profile focus containment, invalid invite feedback, connection cancellation, one-device rematches, both practice games, reduced motion, repeated GPU table rebuilds, actual shot-playback clock accounting, missing WebGL, four home widths (375/768/1024/1440), and two short landscape lobby sizes (844×390 and 667×375).
 
@@ -23,4 +23,4 @@ Used the Playwright plugin with separate browser contexts for host and guest. Ve
 
 Graphics measurements over five alternating snooker/pool rebuilds: allocated geometries previously grew 59 → 76 → 97 → 114 → 135. After cleanup they remain 51 → 46 → 51 → 46 → 51; textures stabilize after both game sets load.
 
-Refreshed repository screenshots and social preview. Reviewed phone portrait, phone landscape, desktop, profile, lobby, and match presentation. Independent source review findings (modal focus, stale replay, paused-preview refresh, stochastic test input, short lobby) were resolved before committing.
+Refreshed repository screenshots and social preview. Reviewed phone portrait, phone landscape, desktop, profile, lobby, and match presentation. The latest interactive pass additionally verified real mobile touch reveal/reset with no page errors, font loading, normal drag displacement/rotation, and a recorded reveal/return. Independent review found a stale release pose after drag → reset → game selection; reset now clears it and browser coverage checks that sequence. Earlier review findings (modal focus, stale replay, paused-preview refresh, stochastic test input, short lobby) remain resolved.

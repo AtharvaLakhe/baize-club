@@ -695,7 +695,7 @@ export class GameView {
 
     this.scrimEl = h('div.scrim', { hidden: true });
     this.topbar = h('header.room-header', {},
-      h('div.room-identity', {}, h('span.rack-mark', { 'aria-hidden': 'true' }, ...Array.from({ length: 6 }, () => h('i'))),
+      h('div.room-identity', {}, h('span.eight-mark', { 'aria-hidden': 'true' }, '8'),
         h('div', {}, h('span.room-brand', {}, 'obsidian'), h('span.room-kind', {}, 'Your private table'))),
       h('div.room-actions', {}, menuBtn, reactBtn, this.chatBtn),
     );

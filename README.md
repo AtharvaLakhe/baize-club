@@ -82,7 +82,7 @@ If the host reloads, the table reopens on the same code and friends can rejoin w
 
 ## The club interface
 
-The interface is built around a billiards match board: a green playing area beside a paper-style setup sheet. Choose snooker or pool, pick your company, and start. The live preview has a stable camera with pause and re-rack controls. The room uses a compact scoreboard, while the lobby and dialogs follow the same score-sheet styling. See the [design references](design-system/obsidian/REFERENCES.md).
+The entrance is an interactive playroom: drag, click, or tap the oversized eight-ball to reveal the live table, then bring it back with one control. Keyboard activation works too, and reduced motion skips the rolling/parallax. All four play modes and the invite form stay directly available. Wide Syne lettering, midnight-violet surfaces, and chalk accents carry into the lobby, dialogs, and scoreboard. Fonts are self-hosted. See the [design system](design-system/obsidian/MASTER.md) and [references](design-system/obsidian/REFERENCES.md).
 
 **8-ball house rule:** the first legal pot assigns solids or stripes, even on the break. That ownership stays fixed; later pots are counted against the assigned group. A scratched break leaves the table open.
 

@@ -11,6 +11,54 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
+test('the interactive eight reveals the table and can be restored with the keyboard', async ({ page }) => {
+  const ball = page.getByRole('button', { name: 'Roll the eight to reveal the table', exact: true });
+  await expect(ball).toBeVisible();
+  await ball.focus();
+  await page.keyboard.press('Enter');
+  const reset = page.getByRole('button', { name: 'Bring back the eight', exact: true });
+  await expect(reset).toBeFocused();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'true');
+  await reset.press('Enter');
+  await expect(ball).toBeFocused();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'false');
+});
+
+test('a horizontal drag rolls the eight away without a second click reversing the reveal', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const ball = page.getByRole('button', { name: 'Roll the eight to reveal the table', exact: true });
+  const bounds = await ball.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = bounds!.x + bounds!.width / 2, y = bounds!.y + bounds!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 110, y + 12, { steps: 8 });
+  await expect.poll(() => ball.evaluate(el => parseFloat(el.style.getPropertyValue('--drag-x')))).toBeGreaterThan(30);
+  await page.mouse.up();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'true');
+  await expect(page.getByRole('button', { name: 'Bring back the eight', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Bring back the eight', exact: true }).click();
+  const release = await page.locator('.table-preview').evaluate(el => el.style.getPropertyValue('--release-x'));
+  expect(release).toBe('');
+  await page.getByRole('button', { name: 'Snooker', exact: true }).click();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'true');
+});
+
+test('cancelling a drag restores the ball and leaves the next activation usable', async ({ page }) => {
+  const ball = page.getByRole('button', { name: 'Roll the eight to reveal the table', exact: true });
+  const bounds = await ball.boundingBox();
+  const x = bounds!.x + bounds!.width / 2, y = bounds!.y + bounds!.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 70, y, { steps: 4 });
+  await ball.dispatchEvent('pointercancel', { pointerId: 1, isPrimary: true });
+  await page.mouse.up();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'false');
+  await expect(ball).not.toHaveClass(/dragging/);
+  await ball.click();
+  await expect(page.locator('.table-preview')).toHaveAttribute('data-open', 'true');
+});
+
 test('game and mode selections remain keyboard focused and update the action', async ({ page }) => {
   await page.getByRole('button', { name: '8-ball pool', exact: true }).click();
   await expect(page.getByRole('button', { name: '8-ball pool', exact: true })).toBeFocused();
@@ -78,6 +126,8 @@ test('practice starts in both games', async ({ page }) => {
 test('reduced motion starts with a paused preview and supports a static game switch', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.reload();
+  await page.getByRole('button', { name: 'Roll the eight to reveal the table', exact: true }).click();
+  await expect(page.locator('.ball-gate')).toHaveCSS('animation-name', 'none');
   await expect(page.getByRole('button', { name: 'Play table preview', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '8-ball pool', exact: true }).click();
   await expect(page.getByRole('heading', { name: '8-ball pool', exact: true })).toBeVisible();
@@ -145,6 +195,7 @@ test('the club remains usable when WebGL is unavailable', async ({ page }) => {
     } as typeof getContext;
   });
   await page.reload();
+  await page.getByRole('button', { name: 'Roll the eight to reveal the table', exact: true }).click();
   await expect(page.locator('.preview-fallback')).toBeVisible();
   await page.getByRole('button', { name: 'Solo practice', exact: true }).click();
   await page.getByRole('button', { name: 'Start practising', exact: true }).click();

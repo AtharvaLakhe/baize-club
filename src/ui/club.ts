@@ -10,6 +10,7 @@ import { mountDialog } from './dialog';
 import { defaultCloth } from './lobby';
 import { REPO_URL } from './sharecard';
 import { Attract, type HomeActions } from './home';
+import { attachEight } from './eight';
 
 function withName(go: () => void, refresh: () => void) {
   if (prefs().profile.name.trim()) return go();
@@ -31,8 +32,7 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   paintMe();
   me.addEventListener('click', () => openProfile({ onChange: paintMe }));
   const brand = h('a.logo', { href: '/', 'aria-label': 'Obsidian home' },
-    h('span.rack-mark', { 'aria-hidden': 'true' }, ...Array.from({ length: 6 }, () => h('i'))),
-    h('div', {}, h('h1', {}, 'obsidian'), h('span.logo-note', {}, 'An internet billiards club')));
+    h('span.eight-mark', { 'aria-hidden': 'true' }, '8'), h('span', {}, 'obsidian'));
   const nav = h('header.nav', {}, h('div.wrap', {}, brand,
     h('div.nav-right', {},
       h('button.nav-help', { type: 'button', onclick: () => maybeShowHowTo(true) }, 'How to play'),
@@ -48,7 +48,7 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
       onclick: () => {
         const ls = prefs().lastSettings;
         savePrefs({ lastSettings: { ...ls, game: g, tableTheme: defaultCloth(g, ls.tableTheme) } });
-        paintGame(); attract?.setGame(g);
+        paintGame(); attract?.setGame(g); setTableOpen(true);
       },
     }, label)));
     for (const button of gameSeg.querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.game === current));
@@ -58,9 +58,10 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   paintGame();
 
   const canvas = h('canvas.attract', { 'aria-hidden': 'true' }) as HTMLCanvasElement;
+  let tableOpen = false;
   let manualPaused = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let visible = true;
-  const syncPlayback = () => { if (attract) attract.paused = manualPaused || !visible || document.hidden; };
+  const syncPlayback = () => { if (attract) attract.paused = manualPaused || !tableOpen || !visible || document.hidden; };
   const pause = h('button.preview-control', { type: 'button', 'aria-label': manualPaused ? 'Play table preview' : 'Pause table preview', 'aria-pressed': String(manualPaused), onclick: () => {
     manualPaused = !manualPaused;
     if (!manualPaused) attract?.start();
@@ -69,12 +70,32 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
     pause.setAttribute('aria-label', manualPaused ? 'Play table preview' : 'Pause table preview');
     pause.textContent = manualPaused ? 'Play preview' : 'Pause preview';
   } }, manualPaused ? 'Play preview' : 'Pause preview');
-  const preview = h('section.table-preview', { 'aria-label': 'Table preview' },
-    h('div.preview-head', {}, gameSeg, h('span.preview-badge', {}, 'No accounts. No downloads.')),
+  const ball = h('button.ball-gate', { type: 'button', 'aria-label': 'Roll the eight to reveal the table', 'aria-describedby': 'eight-hint', 'aria-controls': 'home-table', 'aria-expanded': 'false' },
+    h('span.ball-surface', { 'aria-hidden': 'true' }, h('span.ball-number', {}, '8'), h('span.ball-glint'))) as HTMLButtonElement;
+  const reset = h('button.preview-control.reset-eight', { type: 'button', hidden: true, 'aria-label': 'Bring back the eight', onclick: () => { setTableOpen(false); ball.focus(); } }, icon('replay', 15), 'Bring back the eight');
+  const preview = h('section.table-preview', { 'aria-label': 'Table preview', 'data-open': 'false' },
+    h('div.preview-head', {}, h('p.club-intro', {}, 'Pool. Snooker.', h('br'), 'Your people.'), gameSeg),
+    h('h1.hero-brand', {}, 'obsidian'),
+    h('span.orbit-ball.cue-ball', { 'aria-hidden': 'true' }),
+    h('span.orbit-ball.blue-ball', { 'aria-hidden': 'true' }, h('i', {}, '2')),
+    ball, h('p.eight-hint', { id: 'eight-hint' }, 'Drag or tap the eight. Make room for a game.'),
     h('div.preview-title', {}, tableLabel, h('span.preview-nudge', {}, 'Table preview')),
-    h('div.preview-scene', {}, h('img.preview-fallback', { src: '/table.png', alt: 'An Obsidian billiards table', hidden: true }), canvas),
+    h('div.preview-scene', { id: 'home-table' }, h('img.preview-fallback', { src: '/table.png', alt: 'An Obsidian billiards table', hidden: true }), canvas),
     h('div.preview-foot', {}, h('small', {}, gameNote),
-      h('div.preview-tools', {}, pause, h('button.preview-control.rerack', { type: 'button', 'aria-label': 'Re-rack the preview table', onclick: () => attract?.setGame(prefs().lastSettings.game) }, icon('replay', 16), 'Re-rack'))));
+      h('div.preview-tools', {}, reset, pause, h('button.preview-control.rerack', { type: 'button', 'aria-label': 'Re-rack the preview table', onclick: () => { attract?.setGame(prefs().lastSettings.game); setTableOpen(true); } }, icon('replay', 16), 'Re-rack'))));
+  function setTableOpen(open: boolean) {
+    preview.dataset.returning = String(!open && tableOpen);
+    if (!open) for (const property of ['--release-x', '--release-y', '--release-roll']) preview.style.removeProperty(property);
+    tableOpen = open;
+    preview.dataset.open = String(open);
+    reset.hidden = !open;
+    ball.tabIndex = open ? -1 : 0;
+    ball.setAttribute('aria-hidden', String(open));
+    ball.setAttribute('aria-expanded', String(open));
+    syncPlayback();
+    if (open && manualPaused) attract?.still();
+  }
+  const detachEight = attachEight(ball, preview, () => { setTableOpen(true); reset.focus({ preventScroll: true }); });
 
   const passAndPlay = () => {
     const scrim = h('div.scrim');
@@ -142,15 +163,15 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   code.addEventListener('input', () => { code.removeAttribute('aria-invalid'); joinError.hidden = true; });
 
   const play = h('aside.play-section', { id: 'play', 'aria-labelledby': 'play-title' },
-    h('div.setup-heading', {}, h('span.setup-label', {}, 'Pick your company'), h('h2', { id: 'play-title' }, 'Fancy a frame?')),
+    h('div.setup-heading', {}, h('h2', { id: 'play-title' }, 'Make a night of it.'), h('p', {}, 'Choose your company. We’ll handle the table.')),
     notice ? h('div.notice-bar', { role: 'alert' }, notice) : null,
     h('div.play-console', {}, modeGrid, difficulty, h('div.start-row', {}, start)),
     h('form.join-console', { onsubmit: join, 'aria-labelledby': 'join-title' },
       h('h3', { id: 'join-title' }, 'Already got an invite?'),
-      h('p', { id: 'join-help' }, 'Six-character code or the whole invite link. Both work.'),
+      h('p', { id: 'join-help' }, 'Use a table code or paste your invite link.'),
       h('label.join-label', { for: 'table-code' }, 'Table code or invite link'),
       h('div.join-row', {}, code, h('button.btn', { type: 'submit' }, 'Join table', icon('arrow', 16))), joinError),
-    h('p.setup-footnote', {}, 'Free to play. Bring your own rival.'));
+    h('p.setup-footnote', {}, 'No account. No download. Just a good game.'));
 
   const notes = h('section.house-notes.wrap', { 'aria-label': 'House notes' },
     h('h2', {}, 'A few house notes'),
@@ -163,7 +184,7 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
       h('a', { href: `${REPO_URL}/issues`, target: '_blank', rel: 'noopener' }, 'Report a bug'),
       h('a', { href: 'https://github.com/AtharvaLakhe', target: '_blank', rel: 'noopener' }, 'Made by Atharva Lakhe'))));
   site.append(h('a.skip-link', { href: '#play' }, 'Skip to play'), nav,
-    h('main.match-board.wrap', {}, preview, play), notes, footer);
+    h('main.playroom.wrap', {}, preview, play), notes, footer);
   root.append(site);
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -181,11 +202,12 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
     attract = new Attract(canvas, () => ({ top: 5, right: 5, bottom: 5, left: 5 }));
     if (reduced.matches) attract.still();
     else attract.start();
+    syncPlayback();
   } catch {
     canvas.hidden = true;
     preview.querySelector<HTMLImageElement>('.preview-fallback')!.hidden = false;
-    preview.querySelector('.preview-badge')!.textContent = 'Table preview';
-    preview.querySelector('.preview-tools')!.remove();
+    pause.remove();
+    preview.querySelector('.rerack')!.remove();
   }
   const resize = new ResizeObserver(() => attract?.resize());
   resize.observe(preview);
@@ -193,5 +215,5 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   io.observe(preview);
   const visibility = () => syncPlayback();
   document.addEventListener('visibilitychange', visibility);
-  return () => { resize.disconnect(); io.disconnect(); reduced.removeEventListener('change', onMotionChange); document.removeEventListener('visibilitychange', visibility); attract?.stop(); site.remove(); };
+  return () => { detachEight(); resize.disconnect(); io.disconnect(); reduced.removeEventListener('change', onMotionChange); document.removeEventListener('visibilitychange', visibility); attract?.stop(); site.remove(); };
 }

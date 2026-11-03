@@ -1,6 +1,14 @@
 # References and decisions
 
-The user requested a distinctive identity and rejected the earlier glossy luxury treatment. These references informed the new composition:
+The user requested a distinctive identity and rejected the glossy luxury and subsequent paper match-board treatments. The current composition uses an oversized interactive billiard ball, wide Syne lettering, midnight-violet surfaces, and chalk/lavender controls. Its defining interaction is authored for this project: drag or activate the eight to uncover the actual table. This replaces the earlier static design directions.
+
+The Playwright plugin was used to inspect the real mouse drag, keyboard reveal/reset, touch activation, and resulting table view. The CSS ball introduces no second WebGL context. All game actions remain available independently of the toy. UI UX Pro Max supplied the guidance on drag alternatives and reduced motion.
+
+The Latin font assets are self-hosted with their SIL Open Font License files. Upstream sources: [Syne](https://github.com/google/fonts/tree/main/ofl/syne) and [DM Sans](https://github.com/google/fonts/tree/main/ofl/dmsans).
+
+## Earlier reference studies
+
+These studies informed earlier iterations and general usability decisions; they are retained as research history, rather than as a template for the current visual composition:
 
 | Reference | Useful idea | Applied here |
 |---|---|---|
@@ -12,8 +20,4 @@ The user requested a distinctive identity and rejected the earlier glossy luxury
 
 The first three sites were visited and visually inspected. The latter two are documented studies from Awesome Design MD. No layouts, logos, illustrations, or copy were imported from those sites.
 
-The billiards-specific idea is a match board: deep green playing area, cue-ball paper, printed score-sheet lines, a triangle of balls, and red selection marks. Barlow Condensed gives the wordmark and scores a sporting voice. IBM Plex Sans keeps setup and controls readable. The actual 3D table remains the main image.
-
-The Latin font assets are served locally. Their SIL Open Font License files are included in public/fonts; upstream sources are [Barlow Condensed](https://github.com/google/fonts/tree/main/ofl/barlowcondensed) and [IBM Plex Sans](https://github.com/google/fonts/tree/main/ofl/ibmplexsans).
-
-Interaction comes from game choice, setup, and the ball demo. The camera stays still, and decorative lighting and page-entry animation have been removed. All four play modes, invite handling, keyboard behavior, and the earlier rules/lifecycle fixes remain.
+The paper, red selection marks, six-ball rack logo, and condensed typography from the match-board pass have been retired. All four play modes, invite handling, keyboard behavior, and the earlier rules/lifecycle fixes remain.
