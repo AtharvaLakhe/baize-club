@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test('game and mode selections remain keyboard focused and update the action', async ({ page }) => {
   await page.getByRole('button', { name: '8-ball pool', exact: true }).click();
   await expect(page.getByRole('button', { name: '8-ball pool', exact: true })).toBeFocused();
-  await expect(page.getByText('Classic 8-ball pool')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '8-ball pool', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'The computer', exact: true }).click();
   await expect(page.getByRole('button', { name: 'The computer', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Hard', exact: true }).click();
@@ -41,7 +41,7 @@ test('invalid invites show an inline error and a pending join can be cancelled',
   await page.getByRole('textbox', { name: 'Table code or invite link' }).fill('https://example.com/t/ABC234');
   await page.getByRole('button', { name: 'Join table', exact: true }).click();
   await page.getByRole('button', { name: 'Back to the club', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'The table is yours.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'obsidian', exact: true })).toBeVisible();
   await expect(page).toHaveURL('/');
 });
 
@@ -80,7 +80,7 @@ test('reduced motion starts with a paused preview and supports a static game swi
   await page.reload();
   await expect(page.getByRole('button', { name: 'Play table preview', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '8-ball pool', exact: true }).click();
-  await expect(page.getByText('Classic 8-ball pool')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '8-ball pool', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Play table preview', exact: true })).toBeVisible();
 });
 

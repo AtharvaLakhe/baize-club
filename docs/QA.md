@@ -1,8 +1,8 @@
-# Redesign and reliability verification — 2026-11-03
+# Match-board design and reliability verification — 2026-11-03
 
 ## Changes covered
 
-- Rebuilt club entrance, integrated mode/game selection, animated feedback, controllable live preview, tabbed lobby, room header, scoreboard, controls dock, dialogs, and responsive styling.
+- Reworked the entrance as a table-and-score-sheet board, with a stable live preview, direct mode/game selection, and matching lobby, scoreboard, dialogs, and responsive styling. References and decisions are recorded in design-system/obsidian/REFERENCES.md.
 - Pool: the first legal pot assigns groups, including a legal break pot. Later solids stay with the player assigned solids; a scratched break does not assign groups. Regressions cover either breaker. Group names remain visible beside remaining-ball indicators.
 - Pass-and-play rematches, duplicate start protection, stale computer-turn cleanup, session teardown, cancelled connections, broker timeout, premature channel close, and reserved host identity protection.
 - Corrupt saved preferences/settings, non-finite cue placement, and invalid spin input.

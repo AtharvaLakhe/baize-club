@@ -10,7 +10,6 @@ import { mountDialog } from './dialog';
 import { defaultCloth } from './lobby';
 import { REPO_URL } from './sharecard';
 import { Attract, type HomeActions } from './home';
-import { animate } from './motion';
 
 function withName(go: () => void, refresh: () => void) {
   if (prefs().profile.name.trim()) return go();
@@ -32,17 +31,15 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   paintMe();
   me.addEventListener('click', () => openProfile({ onChange: paintMe }));
   const brand = h('a.logo', { href: '/', 'aria-label': 'Obsidian home' },
-    h('span.club-mark', { 'aria-hidden': 'true' }, h('span', {}, '8')),
-    h('span', {}, 'Obsidian', h('small', {}, 'The online billiards club')));
+    h('span.rack-mark', { 'aria-hidden': 'true' }, ...Array.from({ length: 6 }, () => h('i'))),
+    h('div', {}, h('h1', {}, 'obsidian'), h('span.logo-note', {}, 'An internet billiards club')));
   const nav = h('header.nav', {}, h('div.wrap', {}, brand,
-    h('nav.nav-links', { 'aria-label': 'Club navigation' },
-      h('a.active', { href: '#club' }, 'The club'),
-      h('a', { href: '#play' }, 'Play a frame'),
-      h('button.nav-help', { type: 'button', onclick: () => maybeShowHowTo(true) }, 'How to play')),
-    h('div.nav-right', {}, h('a.repo-link', { href: REPO_URL, target: '_blank', rel: 'noopener', 'aria-label': 'View source on GitHub' }, icon('github', 19)), me)));
+    h('div.nav-right', {},
+      h('button.nav-help', { type: 'button', onclick: () => maybeShowHowTo(true) }, 'How to play'),
+      h('a.repo-link', { href: REPO_URL, target: '_blank', rel: 'noopener' }, 'GitHub'), me)));
 
   const gameSeg = h('div.seg.game-seg', { role: 'group', 'aria-label': 'Game' });
-  const tableLabel = h('span');
+  const tableLabel = h('h2');
   const gameNote = h('span');
   const paintGame = () => {
     const current = prefs().lastSettings.game;
@@ -52,12 +49,11 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
         const ls = prefs().lastSettings;
         savePrefs({ lastSettings: { ...ls, game: g, tableTheme: defaultCloth(g, ls.tableTheme) } });
         paintGame(); attract?.setGame(g);
-        animate(canvas, [{ opacity: .3, transform: 'scale(.96)' }, { opacity: 1, transform: 'scale(1)' }], 420);
       },
     }, label)));
     for (const button of gameSeg.querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.game === current));
-    tableLabel.textContent = current === 'pool8' ? 'Classic 8-ball pool' : 'Championship snooker';
-    gameNote.textContent = current === 'pool8' ? 'Solids, stripes, then the eight.' : 'Reds, colours, and a little composure.';
+    tableLabel.textContent = current === 'pool8' ? '8-ball pool' : 'Snooker';
+    gameNote.textContent = current === 'pool8' ? 'Clear your group. Then the eight.' : 'Pot a red, then a colour.';
   };
   paintGame();
 
@@ -73,19 +69,12 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
     pause.setAttribute('aria-label', manualPaused ? 'Play table preview' : 'Pause table preview');
     pause.textContent = manualPaused ? 'Play preview' : 'Pause preview';
   } }, manualPaused ? 'Play preview' : 'Pause preview');
-  const preview = h('div.table-preview', {},
-    h('div.preview-head', {}, h('span.preview-live', {}, h('span.dot'), 'A table is always waiting'), h('span.preview-badge', {}, icon('eye', 14), 'Live preview')),
+  const preview = h('section.table-preview', { 'aria-label': 'Table preview' },
+    h('div.preview-head', {}, gameSeg, h('span.preview-badge', {}, 'No accounts. No downloads.')),
+    h('div.preview-title', {}, tableLabel, h('span.preview-nudge', {}, 'Table preview')),
     h('div.preview-scene', {}, h('img.preview-fallback', { src: '/table.png', alt: 'An Obsidian billiards table', hidden: true }), canvas),
-    h('div.preview-foot', {}, h('div', {}, tableLabel, h('small', {}, gameNote)),
-      h('div.preview-tools', {}, pause, h('button.preview-control.rerack', { type: 'button', 'aria-label': 'Re-rack the preview table', onclick: () => { attract?.setGame(prefs().lastSettings.game); animate(canvas, [{ opacity: .35 }, { opacity: 1 }], 400); } }, icon('replay', 16)))));
-  const hero = h('section.club-hero.wrap', { id: 'club', 'aria-labelledby': 'hero-title' },
-    h('div.hero-copy', {},
-      h('div.club-invitation', {}, h('span.short-rule'), 'Good games. Better company.'),
-      h('h1', { id: 'hero-title' }, 'The table', h('br'), 'is yours.'),
-      h('p.hero-description', {}, 'A quiet corner of the internet for a proper game. Play snooker or pool with friends, wherever the evening finds you.'),
-      h('a.btn.btn-gold.btn-lg.hero-link', { href: '#play' }, 'Take your seat', icon('arrow', 18)),
-      h('p.hero-aside', {}, 'No accounts. No downloads. Just play.')),
-    preview);
+    h('div.preview-foot', {}, h('small', {}, gameNote),
+      h('div.preview-tools', {}, pause, h('button.preview-control.rerack', { type: 'button', 'aria-label': 'Re-rack the preview table', onclick: () => attract?.setGame(prefs().lastSettings.game) }, icon('replay', 16), 'Re-rack'))));
 
   const passAndPlay = () => {
     const scrim = h('div.scrim');
@@ -114,10 +103,10 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   paintLevels();
   const difficulty = h('div.difficulty', { hidden: true }, h('span', {}, 'Difficulty'), levelSeg);
   const modeChoices: Array<{ id: Mode; icon: IconName; name: string; text: string; cta: string }> = [
-    { id: 'friends', icon: 'users', name: 'With friends', text: 'Your table. Your invite link.', cta: 'Open a private table' },
-    { id: 'computer', icon: 'bot', name: 'The computer', text: 'A worthy opponent, any time.', cta: 'Play the computer' },
-    { id: 'practice', icon: 'target', name: 'Solo practice', text: 'Find your touch. Take your time.', cta: 'Start practising' },
-    { id: 'local', icon: 'swap', name: 'Pass-and-play', text: 'Two players. One screen.', cta: 'Set up pass-and-play' },
+    { id: 'friends', icon: 'users', name: 'With friends', text: 'Send a private link', cta: 'Open a private table' },
+    { id: 'computer', icon: 'bot', name: 'The computer', text: 'Three difficulty levels', cta: 'Play the computer' },
+    { id: 'practice', icon: 'target', name: 'Solo practice', text: 'No opponent, no rush', cta: 'Start practising' },
+    { id: 'local', icon: 'swap', name: 'Pass-and-play', text: 'Two players, one screen', cta: 'Set up pass-and-play' },
   ];
   const start = h('button.btn.btn-gold.btn-lg', { type: 'button', onclick: () => {
     unlockAudio();
@@ -132,8 +121,6 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   const paintModes = () => {
     if (!modeGrid.childElementCount) modeGrid.append(...modeChoices.map((o) => h('button.play-mode', { type: 'button', 'data-mode': o.id, 'aria-label': o.name, 'aria-describedby': `${o.id}-description`, onclick: () => {
       mode = o.id; paintModes();
-      animate(start, [{ opacity: .4, transform: 'translateY(3px)' }, { opacity: 1, transform: 'translateY(0)' }]);
-      if (mode === 'computer') animate(difficulty, [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'translateY(0)' }]);
     } },
       h('span.mode-icon', {}, icon(o.icon, 21)), h('span', {}, h('b', {}, o.name), h('small', { id: `${o.id}-description` }, o.text)), h('span.mode-check', {}, icon('check', 13)))));
     for (const button of modeGrid.querySelectorAll<HTMLButtonElement>('button')) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
@@ -154,33 +141,30 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   };
   code.addEventListener('input', () => { code.removeAttribute('aria-invalid'); joinError.hidden = true; });
 
-  const play = h('section.play-section.wrap', { id: 'play', 'aria-labelledby': 'play-title' },
-    h('div.section-heading', {}, h('div', {}, h('p.section-note', {}, 'Pull up a chair'), h('h2', { id: 'play-title' }, 'How are we playing?')), gameSeg),
+  const play = h('aside.play-section', { id: 'play', 'aria-labelledby': 'play-title' },
+    h('div.setup-heading', {}, h('span.setup-label', {}, 'Pick your company'), h('h2', { id: 'play-title' }, 'Fancy a frame?')),
     notice ? h('div.notice-bar', { role: 'alert' }, notice) : null,
-    h('div.play-layout', {},
-      h('div.play-console', {}, modeGrid, difficulty,
-        h('div.start-row', {}, h('span', {}, icon('check', 15), 'Free to play. Always private.'), start)),
-      h('form.join-console', { onsubmit: join, 'aria-labelledby': 'join-title' },
-        h('span.invite-icon', {}, icon('link', 23)),
-        h('h3', { id: 'join-title' }, 'Already invited?'),
-        h('p', { id: 'join-help' }, 'Enter your friend’s table code, or paste their invite link.'),
-        h('label.join-label', { for: 'table-code' }, 'Table code or invite link'),
-        h('div.join-row', {}, code, h('button.btn', { type: 'submit' }, 'Join table', icon('arrow', 16))), joinError)));
+    h('div.play-console', {}, modeGrid, difficulty, h('div.start-row', {}, start)),
+    h('form.join-console', { onsubmit: join, 'aria-labelledby': 'join-title' },
+      h('h3', { id: 'join-title' }, 'Already got an invite?'),
+      h('p', { id: 'join-help' }, 'Six-character code or the whole invite link. Both work.'),
+      h('label.join-label', { for: 'table-code' }, 'Table code or invite link'),
+      h('div.join-row', {}, code, h('button.btn', { type: 'submit' }, 'Join table', icon('arrow', 16))), joinError),
+    h('p.setup-footnote', {}, 'Free to play. Bring your own rival.'));
 
-  const detail = (ic: IconName, title: string, text: string) => h('div.club-detail', {}, icon(ic, 21), h('div', {}, h('h3', {}, title), h('p', {}, text)));
-  const details = h('section.club-details.wrap', { 'aria-label': 'The club experience' },
-    detail('target', 'A proper game', 'Real spin, considered physics, and rules that feel familiar.'),
-    detail('users', 'Keep good company', 'Private links, doubles, spectators, and a little table talk.'),
-    detail('palette', 'Set the atmosphere', 'Seven cloths, seven cues. Make yourself at home.'));
+  const notes = h('section.house-notes.wrap', { 'aria-label': 'House notes' },
+    h('h2', {}, 'A few house notes'),
+    h('p', {}, h('b', {}, 'Snooker'), ' / Red, colour, repeat. Then clear yellow through black.'),
+    h('p', {}, h('b', {}, '8-ball'), ' / First legal pot picks your group. Clear it, then the eight.'),
+    h('button', { type: 'button', onclick: () => maybeShowHowTo(true) }, 'Rules & controls', icon('arrow', 16)));
   const footer = h('footer.footer', {}, h('div.wrap', {},
-    h('span.footer-brand', {}, 'Obsidian', h('small', {}, 'A little competition. A good evening.')),
-    h('div.footer-right', {}, h('span', {}, 'Made by ', h('a', { href: 'https://github.com/AtharvaLakhe', target: '_blank', rel: 'noopener' }, 'Atharva Lakhe')),
+    h('span', {}, 'Built for a game with friends. Not another account.'),
+    h('div.footer-right', {},
       h('a', { href: `${REPO_URL}/issues`, target: '_blank', rel: 'noopener' }, 'Report a bug'),
-      h('a', { href: REPO_URL, target: '_blank', rel: 'noopener' }, 'Open source', icon('github', 15)))));
-  site.append(h('a.skip-link', { href: '#play' }, 'Skip to play'), nav, h('main', {}, hero, play, details), footer);
+      h('a', { href: 'https://github.com/AtharvaLakhe', target: '_blank', rel: 'noopener' }, 'Made by Atharva Lakhe'))));
+  site.append(h('a.skip-link', { href: '#play' }, 'Skip to play'), nav,
+    h('main.match-board.wrap', {}, preview, play), notes, footer);
   root.append(site);
-  animate(hero.querySelector('.hero-copy')!, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'translateY(0)' }], 700);
-  animate(preview, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }], 800, 100);
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const onMotionChange = () => {
@@ -209,12 +193,5 @@ export function renderHome(root: HTMLElement, actions: HomeActions, notice?: str
   io.observe(preview);
   const visibility = () => syncPlayback();
   document.addEventListener('visibilitychange', visibility);
-  preview.addEventListener('pointermove', (e) => {
-    if (e.pointerType !== 'mouse' || reduced.matches) return;
-    const r = preview.getBoundingClientRect();
-    preview.style.setProperty('--spot-x', `${((e.clientX - r.left) / r.width) * 100}%`);
-    preview.style.setProperty('--spot-y', `${((e.clientY - r.top) / r.height) * 100}%`);
-  });
-  preview.addEventListener('pointerleave', () => { preview.style.removeProperty('--spot-x'); preview.style.removeProperty('--spot-y'); });
   return () => { resize.disconnect(); io.disconnect(); reduced.removeEventListener('change', onMotionChange); document.removeEventListener('visibilitychange', visibility); attract?.stop(); site.remove(); };
 }

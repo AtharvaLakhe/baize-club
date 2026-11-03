@@ -24,7 +24,7 @@ export function openProfile(opts: { requireName?: boolean; title?: string; done?
 
   const preview = h('div.avatar.lg', {}, p.profile.avatar);
   const name = h('input.input', { id: 'profile-name', maxlength: 20, value: p.profile.name, placeholder: 'What should friends call you?', autocomplete: 'nickname' }) as HTMLInputElement;
-  const err = h('small', { style: 'color:#fca5a5', hidden: true }, 'Add a name so friends know who they are playing.');
+  const err = h('small.field-error', { role: 'alert', hidden: true }, 'Add a name so friends know who they are playing.');
 
   const avatars = h('div.avatar-grid', { role: 'group', 'aria-label': 'Picture' });
   const paintAvatars = () => {

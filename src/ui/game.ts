@@ -695,9 +695,9 @@ export class GameView {
 
     this.scrimEl = h('div.scrim', { hidden: true });
     this.topbar = h('header.room-header', {},
-      h('div.room-identity', {}, h('span.club-mark', { 'aria-hidden': 'true' }, h('span', {}, '8')),
-        h('div', {}, h('span.room-brand', {}, 'Obsidian'), h('span.room-kind', {}, 'Your private table'))),
-      h('div.room-actions', {}, h('span.room-message', {}, 'Make yourself at home.'), menuBtn, reactBtn, this.chatBtn),
+      h('div.room-identity', {}, h('span.rack-mark', { 'aria-hidden': 'true' }, ...Array.from({ length: 6 }, () => h('i'))),
+        h('div', {}, h('span.room-brand', {}, 'obsidian'), h('span.room-kind', {}, 'Your private table'))),
+      h('div.room-actions', {}, menuBtn, reactBtn, this.chatBtn),
     );
     this.buildRails();
     const help = h('div.table-help', {}, h('span', {}, 'Aim'), h('span', { 'aria-hidden': 'true' }, '·'), h('span', {}, 'Pull back'), h('span', { 'aria-hidden': 'true' }, '·'), h('span', {}, 'Release to shoot'), h('button', { type: 'button', onclick: () => maybeShowHowTo(true) }, icon('help', 15), 'Controls'));

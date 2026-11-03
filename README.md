@@ -82,7 +82,7 @@ If the host reloads, the table reopens on the same code and friends can rejoin w
 
 ## The club interface
 
-A rebuilt dark club interface pairs a live table preview with one place to choose your game, opponent, and difficulty. Pause or re-rack the preview, switch between snooker and 8-ball, and start a private table or an offline game. The room has a dedicated identity bar, scoreboard, controls dock, and a tabbed lobby for invites and house rules. Motion respects reduced-motion preferences.
+The interface is built around a billiards match board: a green playing area beside a paper-style setup sheet. Choose snooker or pool, pick your company, and start. The live preview has a stable camera with pause and re-rack controls. The room uses a compact scoreboard, while the lobby and dialogs follow the same score-sheet styling. See the [design references](design-system/obsidian/REFERENCES.md).
 
 **8-ball house rule:** the first legal pot assigns solids or stripes, even on the break. That ownership stays fixed; later pots are counted against the assigned group. A scratched break leaves the table open.
 

@@ -1,5 +1,5 @@
 import './styles.css';
-import './club.css';
+import './match-board.css';
 import { normalizeCode } from './net/protocol';
 import { createLocal, createOnline, joinRoom, type SavedTable, type Session } from './net/session';
 import { prefs, profileForWire } from './prefs';

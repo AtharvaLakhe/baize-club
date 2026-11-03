@@ -33,14 +33,14 @@ export class Attract {
 
   constructor(readonly canvas: HTMLCanvasElement, private padding: () => { top: number; right: number; bottom: number; left: number }) {
     this.renderer = new Renderer3D(canvas, this.table, defaultCloth(this.settings.game, 'championship'));
-    this.renderer.setMode('orbit');
+    this.renderer.setMode('overview');
     this.renderer.setPadding(padding());
     this.waitUntil = performance.now() + 900;
   }
 
   start() {
     cancelAnimationFrame(this.raf);
-    this.renderer.setMode('orbit');
+    this.renderer.setMode('overview');
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.tick);
     window.addEventListener('resize', this.onResize);

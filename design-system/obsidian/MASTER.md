@@ -1,31 +1,30 @@
-# Obsidian club design system
+# Obsidian match-board design system
 
-Direction: a dark, premium billiards club with an actual interactive 3D table. Use realistic cloth/wood in the game and quiet, tactile controls around it. Typography carries the entrance; brass carries selection and primary actions.
+The visual reference is a billiards match board: a felt playing area beside a printed score sheet. The site opens at the table and setup controls. Its identity comes from heavy condensed type, a six-ball rack mark, green/paper contrast, and vermilion selection colour.
 
-UI UX Pro Max informed this system: verified `luxury dark premium` style matches (Skeuomorphism and Dark Mode), `luxury serif elegant` typography (Luxury Serif/Cormorant), Three.js smooth pointer follow, and cancellable state transitions. Its broad product search suggested a vibrant red sports palette, which does not fit the user's explicit dark premium choice; the palette below is intentional.
+Live references were opened and visually inspected through the Playwright plugin. Historical/product studies came from Awesome Design MD. UI UX Pro Max informed focus, contrast, touch targets, and responsive checks. The composition and palette are specific to this billiards app. See [references and decisions](REFERENCES.md).
 
 | Token | Value | Role |
 |---|---|---|
-| `--bg` | `#111312` | Room background |
-| `--surface` | `#1b1e1b` | Setup, dialogs, menus |
-| `--surface-2` | `#252a24` | Hover/raised controls |
-| `--text` | `#eee9dc` | Main content |
-| `--text-2` | `#aeb7aa` | Supporting content |
-| `--text-3` | `#969f90` | Quiet supporting content |
-| `--gold` | `#c6a66b` | Primary action and selection |
-| `--gold-hi` | `#debf86` | Hover/active brass |
-| `--display` | Cormorant Garamond, Georgia, serif | Club headings and scores |
-| `--font` | Manrope, system sans-serif | Controls and readable text |
+| Page | `#dbe0d8` | Outside the match board |
+| Paper | `#f1f2e8` | Setup, dialogs, menus |
+| Ink | `#243126` | Paper text and boundaries |
+| Felt stage | `#1d4938` | Home table area |
+| `--bg` | `#182d25` | Game room background |
+| `--accent` | `#c93c25` | Actions and selection |
+| Focus | `#3c62ce` | Input focus |
+| `--display` | Barlow Condensed, Impact, condensed sans-serif | Headings and scoreboard |
+| `--font` | IBM Plex Sans, Arial, sans-serif | Controls and body text |
 
 ## Layout
 
-Home: invitation + live table, integrated game/mode setup, separate join form, short club details. Match room: identity header, focused central scoreboard, edge power/spin controls, quiet controls dock. Lobby: Players & invite / House rules tabs with a persistent start action. Profile and game decisions share one accessible modal lifecycle.
+Home: masthead, table-and-setup board, short rules, footer. Mobile stacks the compact table above setup. Mode choices form a score-sheet list. The lobby and dialogs use paper surfaces; gameplay uses a dark scoreboard and the actual 3D table. Preserve the tabbed lobby, persistent start action, and shared accessible modal lifecycle.
 
 ## Interaction and motion
 
 - Update semantics immediately; never wait for animation to establish selected state.
 - Preserve focused mode/game controls when choices change.
-- Replace in-flight control animations using native Web Animations (180–420ms); orchestrate entrance once (700–800ms).
-- Live preview: orbit, silent physics demo, pause/play, re-rack, pointer-follow lighting. Pause when hidden/offscreen. Reduced motion starts static and cancels decorative animation.
+- Keep feedback short and functional. The pointer spotlight and entrance choreography are removed.
+- Live preview: silent ball movement with a stable overview camera, pause/play, and re-rack. Pause when hidden/offscreen. Reduced motion starts static.
 - Visible focus, text labels for ball groups, inline form errors, cancellable connections, focus-trapped dialogs, inert backgrounds.
 - Layout QA at 375, 768, 1024, and 1440 pixels, plus phone landscape. No essential action relies on hover.

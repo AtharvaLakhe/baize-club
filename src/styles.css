@@ -1,10 +1,10 @@
 /* Shared Obsidian controls and table-room primitives. Club tokens carry across every screen. */
 :root {
-  --bg: #111312;
+  --bg: #182d25;
   --bg-2: #151815;
-  --surface: #1b1e1b;
-  --surface-2: #252a24;
-  --surface-3: #333b30;
+  --surface: #23392e;
+  --surface-2: #304b3a;
+  --surface-3: #3c5943;
   --border: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.14);
   --text: #eee9dc;
@@ -13,15 +13,16 @@
   --felt: #15803d;
   --felt-hi: #22c55e;
   --felt-soft: rgba(34, 197, 94, 0.14);
-  --gold: #c6a66b;
-  --gold-hi: #debf86;
-  --gold-ink: #2a1d05;
+  --accent: #c93c25;
+  --gold: var(--accent);
+  --gold-hi: #ec6044;
+  --gold-ink: #ffffff;
   --red: #ef4444;
   --red-soft: rgba(239, 68, 68, 0.14);
   --amber: #f59e0b;
 
-  --font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --display: 'Cormorant Garamond', Georgia, serif;
+  --font: 'IBM Plex Sans', Arial, sans-serif;
+  --display: 'Barlow Condensed', Impact, 'Arial Narrow', sans-serif;
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 18px;
