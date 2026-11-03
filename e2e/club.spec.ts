@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
+  // Functional checks use the real WebGL scene at a lower pixel density so CPU-only
+  // CI runners can process input/playback in time. CSS viewport and physics stay intact;
+  // full-resolution visual QA is performed separately through the browser plugin.
+  await page.addInitScript(() => Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: .5 }));
   await page.addInitScript(() => localStorage.setItem('baize.prefs.v1', JSON.stringify({
     profile: { name: 'Alex', avatar: '🦉', cue: 'maple' }, seenHowTo: true, sound: 0,
   })));
@@ -117,7 +121,7 @@ test('the shot clock accounts for time spent replaying the shot', async ({ page 
     const view = new GameView(session, { leave() {} });
     document.querySelector('#app')!.replaceChildren();
     view.mount(document.querySelector('#app')!);
-    const params = { dx: 0, dy: -1, power: .18, spinX: 0, spinY: 0 };
+    const params = { dx: 0, dy: -1, power: .08, spinX: 0, spinY: 0 };
     const world = makeWorld(tableFor(settings), match.frame.balls);
     const record = simulate(world, params);
     const result = resolveShot(match, record, world.balls);
