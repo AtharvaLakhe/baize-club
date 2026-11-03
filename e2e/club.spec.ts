@@ -46,6 +46,7 @@ test('invalid invites show an inline error and a pending join can be cancelled',
 });
 
 test('pass-and-play can concede and start a rematch on one device', async ({ page }) => {
+  test.setTimeout(60_000); // Includes software WebGL initialization and several real input round trips.
   await page.getByRole('button', { name: '8-ball pool', exact: true }).click();
   await page.getByRole('button', { name: 'Pass-and-play', exact: true }).click();
   await page.getByRole('button', { name: 'Set up pass-and-play', exact: true }).click();
@@ -63,6 +64,7 @@ test('pass-and-play can concede and start a rematch on one device', async ({ pag
 });
 
 test('practice starts in both games', async ({ page }) => {
+  test.setTimeout(60_000); // Builds two complete WebGL rooms on CPU-only runners.
   for (const game of ['Snooker', '8-ball pool']) {
     await page.goto('/');
     await page.getByRole('button', { name: game, exact: true }).click();

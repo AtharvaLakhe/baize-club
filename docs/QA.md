@@ -15,7 +15,7 @@
 
 Browser coverage includes selection/focus retention, profile focus containment, invalid invite feedback, connection cancellation, one-device rematches, both practice games, reduced motion, repeated GPU table rebuilds, actual shot-playback clock accounting, missing WebGL, four home widths (375/768/1024/1440), and two short landscape lobby sizes (844×390 and 667×375).
 
-Functional browser tests render the actual WebGL scene at half pixel density, with unchanged CSS viewport sizes and physics. This keeps input and playback checks responsive on CPU-only CI runners. The plugin-based visual checks used normal rendering density. The first hosted CI run timed out on two full-resolution playback tests; the test fixture was adjusted to bound graphics work rather than extending the tests' timeouts.
+Functional browser tests render the actual WebGL scene at half pixel density, with unchanged CSS viewport sizes and physics. The plugin-based visual checks used normal rendering density. Hosted CI exposed software-rendering delays: the clock test now uses a shorter real shot with the same 200ms deadline assertion. The rematch and two-game practice integration cases have a 60-second total budget for scene initialization and real input round trips; the other cases retain the 30-second budget.
 
 ## Manual browser checks
 
